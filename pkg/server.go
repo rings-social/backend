@@ -2,12 +2,14 @@ package server
 
 import (
 	"backend/pkg/models"
+	"backend/pkg/reddit_compat"
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
-	"time"
+	"net/http"
+	"reflect"
+	"strings"
 )
 
 type Server struct {
@@ -58,6 +60,10 @@ func (s *Server) initRoutes() {
 	// Rings
 	g.GET("/r/:ring", s.getRing)
 	g.GET("/r/:ring/posts", s.getRingPosts)
+
+	// Reddit-compatible API
+	s.g.GET("/r/:ring/hot.json", s.getRcRingHot)
+	s.g.GET("/subreddits/search.json", s.getRcRingsSearch)
 
 	// Users
 	g.GET("/u/:user", s.getUser)
@@ -110,37 +116,6 @@ func (s *Server) initModels() error {
 	)
 }
 
-func (s *Server) fillTestData() {
-	s.db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&models.Ring{
-		Name:        "news",
-		Description: "News from around the world",
-		CreatedOn:   time.Now(),
-	})
-
-	s.db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&models.User{
-		Username:    "random_dude",
-		DisplayName: "Random Dude",
-		SocialLinks: []models.SocialLink{
-			{
-				Platform: "twitter",
-				Url:      "https://twitter.com/random_dude",
-			},
-		},
-		CreatedOn: time.Now(),
-	})
-
-	s.db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&models.Post{
-		ID:             1,
-		AuthorUsername: "random_dude",
-		RingName:       "news",
-		Title:          "Republican official appears to have moved $1.3m from nonprofit to own law firm",
-		Link:           "https://www.theguardian.com/us-news/2023/jun/12/harmeet-dhillon-republican-lawyer-rnc-fox-news",
-		Domain:         "theguardian.com",
-		PostedOn:       time.Now(),
-		Score:          1303,
-	})
-}
-
 func (s *Server) getRingPosts(context *gin.Context) {
 	// Gets the posts in ring, sorted by score
 	ringName := context.Param("ring")
@@ -190,4 +165,95 @@ func (s *Server) getUser(context *gin.Context) {
 	}
 
 	context.JSON(200, user)
+}
+
+func (s *Server) getRcRingHot(context *gin.Context) {
+	ringName := context.Param("ring")
+	after := context.Query("after")
+
+	if after != "" {
+		context.JSON(http.StatusOK, []string{})
+		return
+	}
+
+	posts, err := s.repoRingPosts(ringName)
+	if err != nil {
+		context.AbortWithStatusJSON(500, gin.H{
+			"error": "Unable to get posts",
+		})
+		return
+	}
+
+	// Convert to Reddit-compatible format
+	listing, err := toRedditPosts(posts)
+	if err != nil {
+		s.logger.Errorf("unable to convert posts: %v", err)
+		internalServerError(context)
+		return
+	}
+
+	context.JSON(200, listing)
+}
+
+func (s *Server) getRcRingsSearch(context *gin.Context) {
+	q := context.Query("q")
+	if q == "" {
+		context.AbortWithStatusJSON(400, gin.H{
+			"error": "q is required",
+		})
+		return
+	}
+
+	nsfwQuery := context.Query("include_over_18")
+	includeNsfw := false
+	if nsfwQuery == "1" {
+		includeNsfw = true
+	}
+
+	rings, err := s.repoRingsSearch(q, includeNsfw)
+	if err != nil {
+		s.logger.Errorf("unable to search rings: %v", err)
+		internalServerError(context)
+		return
+	}
+
+	// Convert to Reddit-compatible format
+	listing, err := toRedditSubreddits(rings)
+	if err != nil {
+		s.logger.Errorf("unable to convert rings: %v", err)
+		internalServerError(context)
+		return
+	}
+
+	context.JSON(200, listing)
+}
+
+func parseNilAsEmpty(post *reddit_compat.Post) *reddit_compat.Post {
+	// Given a RedditPosts struct, parse the struct tag for the `json` key and check if it does
+	// have the `nilasempty` key. If it does, then set the value to an empty array.
+	// This is needed because Reddit expects an empty array instead of null for some fields.
+
+	t := reflect.TypeOf(post).Elem()
+	v := reflect.ValueOf(post).Elem()
+	num := t.NumField()
+	// Iterate over the fields
+	for i := 0; i < num; i++ {
+		// Get the field
+		field := t.Field(i)
+		// Get the value of the field
+		value := v.Field(i)
+		// Get the json tag
+		tag := field.Tag.Get("json")
+		// Check if the tag has the `nilasempty` key
+		if strings.Contains(tag, "nilasempty") {
+			value.Set(reflect.MakeSlice(value.Type(), 0, 0))
+		}
+	}
+	return post
+}
+
+func internalServerError(context *gin.Context) {
+	context.AbortWithStatusJSON(500, gin.H{
+		"error": "Internal server error",
+	})
 }

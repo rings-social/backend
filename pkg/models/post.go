@@ -12,7 +12,11 @@ type Post struct {
 	Author         *User     `json:"author,omitempty" gorm:"foreignKey:AuthorUsername;references:Username"`
 	Title          string    `json:"title"`
 	Body           string    `json:"body,omitempty"`
-	Link           string    `json:"link"`
-	Domain         string    `json:"domain" gorm:"index"`
+	Link           *string   `json:"link"`
+	Domain         *string   `json:"domain" gorm:"index"`
 	Score          int       `json:"score"`
+	CommentsCount  int       `json:"commentsCount"`
+	Ups            int       `json:"ups"`
+	Downs          int       `json:"downs"`
+	Nsfw           bool      `json:"nsfw"`
 }
