@@ -2,6 +2,7 @@ package server
 
 import (
 	"backend/pkg/models"
+	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 	"time"
 )
@@ -17,9 +18,11 @@ func (s *Server) fillTestData() {
 	})
 
 	s.db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&models.Ring{
-		Name:        "popular",
-		Description: "Popular Posts",
-		CreatedOn:   time.Now(),
+		Name:         "popular",
+		Description:  "Popular Posts",
+		CreatedOn:    time.Now(),
+		Subscribers:  139843,
+		PrimaryColor: "#49545f",
 	})
 
 	s.db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&models.User{
@@ -82,5 +85,12 @@ func (s *Server) fillTestData() {
 		Score:          5,
 		CommentsCount:  1,
 		Nsfw:           false,
+	})
+
+	s.db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&models.Comment{
+		Model:          gorm.Model{ID: 1},
+		AuthorUsername: "john_doe",
+		PostId:         3,
+		Body:           "Thanks for sharing!",
 	})
 }

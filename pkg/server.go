@@ -2,7 +2,6 @@ package server
 
 import (
 	"backend/pkg/models"
-	"backend/pkg/reddit_compat"
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 	"gorm.io/driver/postgres"
@@ -50,26 +49,6 @@ func (s *Server) Run(addr string) error {
 	return s.g.Run(addr)
 }
 
-func (s *Server) initRoutes() {
-	s.g.Use(gin.Recovery())
-	s.g.Use(gin.Logger())
-	s.g.GET("/healthz", s.healthz)
-
-	g := s.g.Group("/api/v1")
-
-	// Rings
-	g.GET("/r/:ring", s.getRing)
-	g.GET("/r/:ring/posts", s.getRingPosts)
-
-	// Reddit-compatible API
-	s.g.GET("/r/:ring/hot.json", s.getRcRingHot)
-	s.g.GET("/subreddits/search.json", s.getRcRingsSearch)
-
-	// Users
-	g.GET("/u/:user", s.getUser)
-
-}
-
 func (s *Server) healthz(context *gin.Context) {
 	context.JSON(200, gin.H{
 		"status": "ok",
@@ -109,6 +88,7 @@ func (s *Server) getRing(context *gin.Context) {
 func (s *Server) initModels() error {
 	// Auto-migrate all the models in `models`
 	return s.db.AutoMigrate(
+		&models.Comment{},
 		&models.Post{},
 		&models.Ring{},
 		&models.User{},
@@ -228,13 +208,13 @@ func (s *Server) getRcRingsSearch(context *gin.Context) {
 	context.JSON(200, listing)
 }
 
-func parseNilAsEmpty(post *reddit_compat.Post) *reddit_compat.Post {
+func parseNilAsEmpty[T any](element T) T {
 	// Given a RedditPosts struct, parse the struct tag for the `json` key and check if it does
 	// have the `nilasempty` key. If it does, then set the value to an empty array.
 	// This is needed because Reddit expects an empty array instead of null for some fields.
 
-	t := reflect.TypeOf(post).Elem()
-	v := reflect.ValueOf(post).Elem()
+	t := reflect.TypeOf(element).Elem()
+	v := reflect.ValueOf(element).Elem()
 	num := t.NumField()
 	// Iterate over the fields
 	for i := 0; i < num; i++ {
@@ -249,11 +229,17 @@ func parseNilAsEmpty(post *reddit_compat.Post) *reddit_compat.Post {
 			value.Set(reflect.MakeSlice(value.Type(), 0, 0))
 		}
 	}
-	return post
+	return element
 }
 
 func internalServerError(context *gin.Context) {
 	context.AbortWithStatusJSON(500, gin.H{
 		"error": "Internal server error",
+	})
+}
+
+func badRequest(context *gin.Context) {
+	context.AbortWithStatusJSON(400, gin.H{
+		"error": "Bad request",
 	})
 }

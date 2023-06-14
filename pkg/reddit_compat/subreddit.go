@@ -35,8 +35,8 @@ type Subreddit struct {
 	CommunityIcon                    string                 `json:"community_icon"`
 	CommunityReviewed                *bool                  `json:"community_reviewed"`
 	ContentCategory                  string                 `json:"content_category,omitempty"`
-	Created                          float64                `json:"created"`
-	CreatedUtc                       float64                `json:"created_utc"`
+	Created                          int                    `json:"created"`
+	CreatedUtc                       int                    `json:"created_utc"`
 	Description                      *string                `json:"description"`
 	DescriptionHtml                  *string                `json:"description_html"`
 	DisableContributorRequests       *bool                  `json:"disable_contributor_requests"`
