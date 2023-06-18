@@ -106,8 +106,17 @@ func (s *Server) getRingPosts(context *gin.Context) {
 		return
 	}
 
+	// Get ring
+	r, err := s.repoRingAbout(ringName)
+	if err != nil {
+		s.logger.Errorf("Unable to get ring %s: %v", ringName, err)
+		internalServerError(context)
+		return
+	}
+
 	var posts []models.Post
-	tx := s.db.Order("score desc").Find(&posts, "ring_name = ?", ringName)
+	tx := s.db.Order("score desc").
+		Find(&posts, "ring_name = ?", ringName)
 	if tx.Error != nil {
 		s.logger.Errorf("Unable to get posts for %s: %v", ringName, tx.Error)
 		context.AbortWithStatusJSON(500, gin.H{
@@ -116,7 +125,7 @@ func (s *Server) getRingPosts(context *gin.Context) {
 		return
 	}
 
-	context.JSON(200, posts)
+	context.JSON(200, convertResponsePosts(posts, r))
 }
 
 func (s *Server) getUser(context *gin.Context) {

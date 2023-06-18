@@ -1,10 +1,14 @@
 package server
 
-import "github.com/gin-gonic/gin"
+import (
+	"github.com/gin-contrib/cors"
+	"github.com/gin-gonic/gin"
+)
 
 func (s *Server) initRoutes() {
 	s.g.Use(gin.Recovery())
 	s.g.Use(gin.Logger())
+	s.g.Use(cors.Default())
 	s.g.GET("/healthz", s.healthz)
 
 	g := s.g.Group("/api/v1")

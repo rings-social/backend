@@ -9,12 +9,13 @@ import (
 
 func (s *Server) fillTestData() {
 	s.db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&models.Ring{
-		Name:        "news",
-		Description: "News from around the world",
-		DisplayName: "News",
-		Title:       "Title",
-		Subscribers: 3094892,
-		CreatedOn:   time.Now(),
+		Name:         "news",
+		Description:  "News from around the world",
+		DisplayName:  "News",
+		Title:        "Title",
+		Subscribers:  3094892,
+		CreatedOn:    time.Now(),
+		PrimaryColor: "#FFC107",
 	})
 
 	s.db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&models.Ring{
