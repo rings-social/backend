@@ -17,6 +17,10 @@ func (s *Server) initRoutes() {
 	g.GET("/r/:ring", s.getRing)
 	g.GET("/r/:ring/posts", s.getRingPosts)
 
+	// Posts
+	g.GET("/posts/:id", s.getPost)
+	g.GET("/posts/:id/comments", s.getComments)
+
 	// Reddit-compatible API
 	s.g.GET("/r/:ring/hot.json", s.getRcRingHot)
 	s.g.GET("/r/:ring/about.json", s.getRcRingAbout)

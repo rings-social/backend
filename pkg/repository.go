@@ -35,7 +35,7 @@ func (s *Server) repoRingAbout(ringName string) (*models.Ring, error) {
 
 func (s *Server) repoComments(postId uint) ([]models.Comment, error) {
 	var comments []models.Comment
-	err := s.db.Preload(clause.Associations).Find(&comments, "post_id = ?", postId).Error
+	err := s.db.Preload("Author").Find(&comments, "post_id = ?", postId).Error
 	if err != nil {
 		return nil, err
 	}
