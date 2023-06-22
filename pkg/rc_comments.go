@@ -6,9 +6,6 @@ import (
 	"strings"
 )
 
-/*
-comments: ID of the comment tree to return
-*/
 func (s *Server) getRcComments(c *gin.Context) {
 	id := c.Param("id")
 	parts := strings.SplitN(id, ".", 2)
@@ -59,7 +56,7 @@ func (s *Server) getRcComments(c *gin.Context) {
 		comments[k].Replies = childComments
 	}
 
-	redditComments, err := toRedditComments(post, comments)
+	redditComments, err := toRedditComments(post, comments, s.baseUrl)
 	if err != nil {
 		internalServerError(c)
 		return

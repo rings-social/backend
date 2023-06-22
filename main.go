@@ -9,7 +9,8 @@ import (
 var args struct {
 	Debug       bool   `arg:"-D,--debug,env:RINGS_DEBUG" help:"enable debug mode"`
 	ListenAddr  string `arg:"-l,--listen,env:RINGS_LISTEN_ADDR" default:"127.0.0.1:8081" help:"address to listen on"`
-	DatabaseUrl string `arg:"--database-url,env:DATABASE_URL" help:"Database URL"`
+	DatabaseUrl string `arg:"--database-url,env:DATABASE_URL,required" help:"Database URL"`
+	BaseUrl     string `arg:"--base-url,env:RINGS_BASE_URL,required" help:"Base URL for the main website"`
 }
 
 var logger = logrus.New()
@@ -21,7 +22,7 @@ func main() {
 func runMain() {
 	arg.MustParse(&args)
 
-	s, err := server.New(args.DatabaseUrl)
+	s, err := server.New(args.DatabaseUrl, args.BaseUrl)
 	if err != nil {
 		logger.Fatal(err)
 	}

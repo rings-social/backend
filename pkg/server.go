@@ -17,12 +17,13 @@ import (
 )
 
 type Server struct {
-	g      *gin.Engine
-	db     *gorm.DB
-	logger *logrus.Logger
+	g       *gin.Engine
+	db      *gorm.DB
+	logger  *logrus.Logger
+	baseUrl string
 }
 
-func New(dsn string) (*Server, error) {
+func New(dsn string, baseUrl string) (*Server, error) {
 	gormLogger := logger.New(
 		log.New(os.Stdout, "\r\n", log.LstdFlags), // io writer
 		logger.Config{
@@ -41,9 +42,10 @@ func New(dsn string) (*Server, error) {
 	}
 
 	s := Server{
-		g:      gin.New(),
-		db:     db,
-		logger: logrus.New(),
+		g:       gin.New(),
+		db:      db,
+		logger:  logrus.New(),
+		baseUrl: baseUrl,
 	}
 
 	s.initRoutes()
@@ -202,7 +204,7 @@ func (s *Server) getRcRingHot(context *gin.Context) {
 
 func (s *Server) convertToRedditPosts(context *gin.Context, posts []models.Post) {
 	// Convert to Reddit-compatible format
-	listing, err := toRedditPosts(posts)
+	listing, err := toRedditPosts(posts, s.baseUrl)
 	if err != nil {
 		s.logger.Errorf("unable to convert posts: %v", err)
 		internalServerError(context)

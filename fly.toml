@@ -9,6 +9,7 @@ processes = []
 
 [env]
   RINGS_LISTEN_ADDR = "0.0.0.0:8080"
+  RINGS_BASE_URL = "https://rings.social"
 
 [[services]]
   internal_port = 8080

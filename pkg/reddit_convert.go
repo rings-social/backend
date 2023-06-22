@@ -8,11 +8,11 @@ import (
 )
 
 // toRedditPosts converts a slice of models.Post to a RedditPosts strucrandom_dudet
-func toRedditPosts(posts []models.Post) (RedditPosts, error) {
+func toRedditPosts(posts []models.Post, baseUrl string) (RedditPosts, error) {
 	var listing RedditPosts
 	listing.Kind = "Listing"
 	for _, post := range posts {
-		p := convertToRedditPost(&post)
+		p := convertToRedditPost(&post, baseUrl)
 		listing.Data.Children = append(listing.Data.Children, p)
 	}
 
@@ -24,7 +24,7 @@ func toRedditPosts(posts []models.Post) (RedditPosts, error) {
 	return listing, nil
 }
 
-func convertToRedditPost(post *models.Post) reddit_compat.KindData[reddit_compat.Post] {
+func convertToRedditPost(post *models.Post, baseUrl string) reddit_compat.KindData[reddit_compat.Post] {
 	postHint := "text"
 	if post.Link != nil {
 		postHint = "link"
@@ -55,7 +55,7 @@ func convertToRedditPost(post *models.Post) reddit_compat.KindData[reddit_compat
 	}
 
 	if p.Data.Domain == nil {
-		myUrl := "http://192.168.1.134:8081" + p.Data.Permalink
+		myUrl := baseUrl + p.Data.Permalink
 		selfRingName := "self." + post.RingName
 		p.Data.Domain = &selfRingName
 		p.Data.Thumbnail = "self"
@@ -72,8 +72,8 @@ func prefixSubreddit(name string) string {
 	return "r/" + name
 }
 
-func toRedditPost(post *models.Post) (reddit_compat.KindData[reddit_compat.Post], error) {
-	return convertToRedditPost(post), nil
+func toRedditPost(post *models.Post, baseUrl string) (reddit_compat.KindData[reddit_compat.Post], error) {
+	return convertToRedditPost(post, baseUrl), nil
 }
 
 func toRedditSubreddits(rings []models.Ring) (RedditSubreddits, error) {
@@ -126,11 +126,11 @@ func toRingAbout(ring *models.Ring) RedditAbout {
 	}
 }
 
-func toRedditComments(post *models.Post, comments []models.Comment) ([]any, error) {
+func toRedditComments(post *models.Post, comments []models.Comment, baseUrl string) ([]any, error) {
 	if post == nil {
 		return nil, fmt.Errorf("post is nil")
 	}
-	redditPost, err := toRedditPost(post)
+	redditPost, err := toRedditPost(post, baseUrl)
 	if err != nil {
 		return nil, err
 	}
