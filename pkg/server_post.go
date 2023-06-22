@@ -28,15 +28,14 @@ func (s *Server) getPost(c *gin.Context) {
 	c.JSON(200, post)
 }
 
-func parsePostId(c *gin.Context) (int, bool) {
+func parsePostId(c *gin.Context) (int64, bool) {
 	idParam := c.Param("id")
 	if idParam == "" {
 		c.JSON(400, gin.H{"error": "id is required"})
 		return 0, true
 	}
 
-	// Parse ID as uint
-	id, err := strconv.Atoi(idParam)
+	id, err := strconv.ParseInt(idParam, 10, 64)
 	if err != nil {
 		c.JSON(400, gin.H{"error": "id must be a number"})
 		return 0, true
@@ -50,7 +49,7 @@ func parsePostId(c *gin.Context) (int, bool) {
 }
 
 func (s *Server) getComments(c *gin.Context) {
-	id, done := parsePostId(c)
+	postId, done := parsePostId(c)
 	if done {
 		return
 	}
@@ -72,15 +71,8 @@ func (s *Server) getComments(c *gin.Context) {
 		parentId = &parentIdUint
 	}
 
-	comments, err := s.repoComments(uint(id), parentId)
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		c.JSON(404, gin.H{"error": "comments not found"})
-		return
-	}
-
-	if err != nil {
-		s.logger.Errorf("unable to get comments for post %d: %v", id, err)
-		internalServerError(c)
+	comments, done := s.retrieveComments(c, postId, parentId)
+	if done {
 		return
 	}
 

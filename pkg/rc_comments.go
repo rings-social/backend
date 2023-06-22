@@ -1,6 +1,7 @@
 package server
 
 import (
+	"backend/pkg/models"
 	"github.com/gin-gonic/gin"
 	"strconv"
 	"strings"
@@ -40,20 +41,9 @@ func (s *Server) getRcComments(c *gin.Context) {
 		parentId = &parentIdUint
 	}
 
-	comments, err := s.repoComments(uint(postId), parentId)
-	if err != nil {
-		internalServerError(c)
+	comments, done := s.retrieveComments(c, postId, parentId)
+	if done {
 		return
-	}
-
-	for k, comment := range comments {
-		childComments, err := s.repoComments(uint(postId), &comment.ID)
-		if err != nil {
-			s.logger.Errorf("unable to get child comments for comment %d: %v", comment.ID, err)
-			internalServerError(c)
-			return
-		}
-		comments[k].Replies = childComments
 	}
 
 	redditComments, err := toRedditComments(post, comments, s.baseUrl)
@@ -62,4 +52,24 @@ func (s *Server) getRcComments(c *gin.Context) {
 		return
 	}
 	c.JSON(200, redditComments)
+}
+
+func (s *Server) retrieveComments(c *gin.Context, postId int64, parentId *uint) ([]models.Comment, bool) {
+	comments, err := s.repoComments(uint(postId), parentId)
+	if err != nil {
+		s.logger.Errorf("unable to get comments for post %d: %v", postId, err)
+		internalServerError(c)
+		return nil, true
+	}
+
+	for k, comment := range comments {
+		childComments, err := s.repoComments(uint(postId), &comment.ID)
+		if err != nil {
+			s.logger.Errorf("unable to get child comments for comment %d: %v", comment.ID, err)
+			internalServerError(c)
+			return nil, true
+		}
+		comments[k].Replies = childComments
+	}
+	return comments, false
 }
