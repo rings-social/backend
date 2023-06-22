@@ -9,8 +9,8 @@ func convertResponsePosts(posts []models.Post, r *models.Ring) []response.Post {
 	var responsePosts []response.Post
 	for _, p := range posts {
 		responsePosts = append(responsePosts, response.Post{
-			ID:             p.ID,
-			PostedOn:       p.PostedOn,
+			ID:             int(p.ID),
+			PostedOn:       p.CreatedAt,
 			RingName:       r.Name,
 			RingColor:      r.PrimaryColor,
 			AuthorUsername: p.AuthorUsername,

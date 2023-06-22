@@ -33,9 +33,20 @@ func (s *Server) repoRingAbout(ringName string) (*models.Ring, error) {
 	return &ring, nil
 }
 
-func (s *Server) repoComments(postId uint) ([]models.Comment, error) {
+func (s *Server) repoComments(postId uint, parentId *uint) ([]models.Comment, error) {
 	var comments []models.Comment
-	err := s.db.Preload("Author").Find(&comments, "post_id = ?", postId).Error
+
+	tx := s.db.Preload("Author").Order("score desc")
+	var err error
+	if parentId == nil {
+		// Postgres doesn't like to compare NULLs with =, so we have to do this.
+		err = tx.
+			Find(&comments, "post_id = ? AND parent_id IS NULL", postId).Error
+	} else {
+		err = tx.
+			Find(&comments, "post_id = ? AND parent_id = ?", postId, parentId).Error
+	}
+
 	if err != nil {
 		return nil, err
 	}

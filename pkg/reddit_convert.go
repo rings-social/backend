@@ -10,21 +10,30 @@ import (
 // toRedditPosts converts a slice of models.Post to a RedditPosts strucrandom_dudet
 func toRedditPosts(posts []models.Post) (RedditPosts, error) {
 	var listing RedditPosts
+	listing.Kind = "Listing"
 	for _, post := range posts {
 		p := convertToRedditPost(&post)
 		listing.Data.Children = append(listing.Data.Children, p)
 	}
 
-	listing.Data.After = "t3_" + listing.Data.Children[len(listing.Data.Children)-1].Data.ID
+	if len(listing.Data.Children) > 0 {
+		last := "t3_" + listing.Data.Children[len(listing.Data.Children)-1].Data.ID
+		listing.Data.After = &last
+	}
 
 	return listing, nil
 }
 
 func convertToRedditPost(post *models.Post) reddit_compat.KindData[reddit_compat.Post] {
+	postHint := "text"
+	if post.Link != nil {
+		postHint = "link"
+	}
 	p := reddit_compat.KindData[reddit_compat.Post]{
 		Kind: "t3",
 		Data: reddit_compat.Post{
 			ID:                    fmt.Sprintf("%d", post.ID),
+			Name:                  fmt.Sprintf("t3_%d", post.ID),
 			Title:                 post.Title,
 			Selftext:              post.Body,
 			SelftextHtml:          &post.Body,
@@ -37,9 +46,11 @@ func convertToRedditPost(post *models.Post) reddit_compat.KindData[reddit_compat
 			Score:                 post.Score,
 			NumComments:           post.CommentsCount,
 			URL:                   post.Link,
-			Created:               int(post.PostedOn.Unix()),
-			CreatedUtc:            int(post.PostedOn.UTC().Unix()),
+			Domain:                post.Domain,
+			Created:               int(post.CreatedAt.Unix()),
+			CreatedUtc:            int(post.CreatedAt.UTC().Unix()),
 			Over18:                post.Nsfw,
+			PostHint:              postHint,
 		},
 	}
 
@@ -107,8 +118,8 @@ func toRingAbout(ring *models.Ring) RedditAbout {
 			DisplayNamePrefixed: "r/" + ring.Name,
 			Subscribers:         ring.Subscribers,
 			DescriptionHtml:     ring.Description,
-			Created:             int(ring.CreatedOn.Unix()),
-			CreatedUtc:          int(ring.CreatedOn.UTC().Unix()),
+			Created:             int(ring.CreatedAt.Unix()),
+			CreatedUtc:          int(ring.CreatedAt.UTC().Unix()),
 			PrimaryColor:        ring.PrimaryColor,
 			ActiveUserCount:     19,
 		},
@@ -116,12 +127,34 @@ func toRingAbout(ring *models.Ring) RedditAbout {
 }
 
 func toRedditComments(post *models.Post, comments []models.Comment) ([]any, error) {
+	if post == nil {
+		return nil, fmt.Errorf("post is nil")
+	}
 	redditPost, err := toRedditPost(post)
 	if err != nil {
 		return nil, err
 	}
 
+	listing := toRedditCommentsInner(post, comments, 0)
+
+	if listing.Data.Children == nil {
+		listing.Data.Children = []reddit_compat.KindData[reddit_compat.Comment]{}
+	}
+	if len(listing.Data.Children) > 0 {
+		listing.Data.After = &listing.Data.Children[len(listing.Data.Children)-1].Data.ID
+	}
+
+	return []any{
+		wrapListing(
+			[]reddit_compat.KindData[reddit_compat.Post]{redditPost},
+		),
+		listing,
+	}, nil
+}
+
+func toRedditCommentsInner(post *models.Post, comments []models.Comment, depth int) RedditComments {
 	var listing RedditComments
+	listing.Kind = "Listing"
 	for _, comment := range comments {
 		c := reddit_compat.KindData[reddit_compat.Comment]{
 			Kind: "t1",
@@ -130,29 +163,24 @@ func toRedditComments(post *models.Post, comments []models.Comment) ([]any, erro
 				Body:                  comment.Body,
 				BodyHtml:              comment.Body,
 				Author:                comment.AuthorUsername,
-				Subreddit:             comment.Post.RingName,
-				SubredditNamePrefixed: "r/" + comment.Post.RingName,
-				Permalink:             getCommentPermalink(comment.Post.RingName, comment.PostId, comment.ID),
+				Subreddit:             post.RingName,
+				SubredditNamePrefixed: "r/" + post.RingName,
+				Permalink:             getCommentPermalink(post.RingName, comment.PostId, comment.ID),
 				LinkID:                fmt.Sprintf("t3_%d", post.ID),
 				Score:                 int(comment.Ups - comment.Downs),
 				Created:               int(comment.CreatedAt.Unix()),
 				CreatedUtc:            int(comment.CreatedAt.UTC().Unix()),
-				Replies:               "",
+				Replies:               toRedditCommentsInner(post, comment.Replies, depth+1),
+				Depth:                 depth,
 			},
 		}
 		c.Data = *parseNilAsEmpty(&c.Data)
 		listing.Data.Children = append(listing.Data.Children, c)
-
 	}
-	listing.Kind = "Listing"
-	listing.Data.After = listing.Data.Children[len(listing.Data.Children)-1].Data.ID
-
-	return []any{
-		wrapListing(
-			[]reddit_compat.KindData[reddit_compat.Post]{redditPost},
-		),
-		listing,
-	}, nil
+	if listing.Data.Children == nil {
+		listing.Data.Children = []reddit_compat.KindData[reddit_compat.Comment]{}
+	}
+	return listing
 }
 
 func getCommentPermalink(name string, postId uint, commentId uint) string {

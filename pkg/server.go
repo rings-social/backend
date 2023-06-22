@@ -2,13 +2,18 @@ package server
 
 import (
 	"backend/pkg/models"
+	"backend/pkg/reddit_compat"
+	"errors"
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
-	"net/http"
+	"gorm.io/gorm/logger"
+	"log"
+	"os"
 	"reflect"
 	"strings"
+	"time"
 )
 
 type Server struct {
@@ -18,7 +23,19 @@ type Server struct {
 }
 
 func New(dsn string) (*Server, error) {
-	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
+	gormLogger := logger.New(
+		log.New(os.Stdout, "\r\n", log.LstdFlags), // io writer
+		logger.Config{
+			SlowThreshold:             time.Second, // Slow SQL threshold
+			LogLevel:                  logger.Info, // Log level
+			IgnoreRecordNotFoundError: true,        // Ignore ErrRecordNotFound error for logger
+			ParameterizedQueries:      false,       // Don't include params in the SQL log
+			Colorful:                  false,       // Disable color
+		},
+	)
+	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
+		Logger: gormLogger,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -161,24 +178,39 @@ func (s *Server) getRcRingHot(context *gin.Context) {
 	after := context.Query("after")
 
 	if after != "" {
-		context.JSON(http.StatusOK, []string{})
+		s.convertToRedditPosts(context, []models.Post{})
 		return
 	}
 
 	posts, err := s.repoRingPosts(ringName)
 	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			context.AbortWithStatusJSON(404, gin.H{
+				"error": "Ring not found",
+			})
+			return
+		}
+		s.logger.Errorf("Unable to get posts for %s: %v", ringName, err)
 		context.AbortWithStatusJSON(500, gin.H{
 			"error": "Unable to get posts",
 		})
 		return
 	}
 
+	s.convertToRedditPosts(context, posts)
+}
+
+func (s *Server) convertToRedditPosts(context *gin.Context, posts []models.Post) {
 	// Convert to Reddit-compatible format
 	listing, err := toRedditPosts(posts)
 	if err != nil {
 		s.logger.Errorf("unable to convert posts: %v", err)
 		internalServerError(context)
 		return
+	}
+
+	if listing.Data.Children == nil {
+		listing.Data.Children = []reddit_compat.KindData[reddit_compat.Post]{}
 	}
 
 	context.JSON(200, listing)

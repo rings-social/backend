@@ -55,7 +55,24 @@ func (s *Server) getComments(c *gin.Context) {
 		return
 	}
 
-	comments, err := s.repoComments(uint(id))
+	var parentId *uint
+	parentIdParam := c.Query("parent_id")
+	if parentIdParam != "" {
+		parentIdInt, err := strconv.Atoi(parentIdParam)
+		if err != nil {
+			c.JSON(400, gin.H{"error": "parent_id must be a number"})
+			return
+		}
+		if parentIdInt < 0 {
+			c.JSON(400, gin.H{"error": "parent_id must be a positive number"})
+			return
+		}
+
+		parentIdUint := uint(parentIdInt)
+		parentId = &parentIdUint
+	}
+
+	comments, err := s.repoComments(uint(id), parentId)
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		c.JSON(404, gin.H{"error": "comments not found"})
 		return
