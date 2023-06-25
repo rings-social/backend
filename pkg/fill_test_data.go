@@ -26,58 +26,7 @@ func (s *Server) fillTestData() {
 		PrimaryColor: "#49545f",
 	})
 
-	s.db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&models.User{
-		Username:    "random_dude",
-		DisplayName: "Random Dude",
-		// ProfilePicture: createRefString("https://images.unsplash.com/photo-1596075780750-81249df16d19?fit=crop&w=200&q=80"),
-		ProfilePicture: nil,
-		SocialLinks: []models.SocialLink{
-			{
-				Platform: "twitter",
-				Url:      "https://twitter.com/random_dude",
-			},
-		},
-		CreatedAt: time.Now(),
-	})
-
-	s.db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&models.User{
-		Username:       "denvit",
-		DisplayName:    "Denys Vitali",
-		Admin:          true,
-		ProfilePicture: createRefString("https://pbs.twimg.com/profile_images/1441455322455949319/_0xwiskP_400x400.jpg"),
-		SocialLinks: []models.SocialLink{
-			{
-				Platform: "twitter",
-				Url:      "https://twitter.com/DenysVitali",
-			},
-		},
-		Badges: []models.Badge{
-			{
-				Id:              "admin",
-				BackgroundColor: "#d70000",
-				TextColor:       "#ffffff",
-			},
-			{
-				Id:              "supporter",
-				BackgroundColor: "#ffde3f",
-				TextColor:       "#895900",
-			},
-		},
-		CreatedAt: time.Now(),
-	})
-
-	s.db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&models.User{
-		Username:       "john_doe",
-		DisplayName:    "John Doe",
-		ProfilePicture: createRefString("https://images.unsplash.com/photo-1590086782792-42dd2350140d?fit=crop&w=200&q=80"),
-		SocialLinks: []models.SocialLink{
-			{
-				Platform: "twitter",
-				Url:      "https://twitter.com/john_doe",
-			},
-		},
-		CreatedAt: time.Now(),
-	})
+	s.fillTestUsers()
 
 	theGuardianLink := "https://www.theguardian.com/us-news/2023/jun/12/harmeet-dhillon-republican-lawyer-rnc-fox-news"
 	theGuardianDomain := "theguardian.com"
@@ -225,4 +174,66 @@ func (s *Server) createOrUpdatePosts(posts []models.Post) error {
 		}
 	}
 	return nil
+}
+
+func (s *Server) fillTestUsers() {
+	users := []models.User{
+		{
+			Username:    "random_dude",
+			DisplayName: "Random Dude",
+			// ProfilePicture: createRefString("https://images.unsplash.com/photo-1596075780750-81249df16d19?fit=crop&w=200&q=80"),
+			ProfilePicture: nil,
+			SocialLinks: []models.SocialLink{
+				{
+					Platform: "twitter",
+					Url:      "https://twitter.com/random_dude",
+				},
+			},
+			CreatedAt: time.Now(),
+		},
+		{
+			Username:       "john_doe",
+			DisplayName:    "John Doe",
+			ProfilePicture: createRefString("https://images.unsplash.com/photo-1590086782793-42dd2350140d?fit=crop&w=200&q=80"),
+			SocialLinks: []models.SocialLink{
+				{
+					Platform: "twitter",
+					Url:      "https://twitter.com/john_doe",
+				},
+			},
+			CreatedAt: time.Now(),
+		},
+		{
+			Username:       "denvit",
+			DisplayName:    "Denys Vitali",
+			Admin:          true,
+			ProfilePicture: createRefString("https://pbs.twimg.com/profile_images/1441455322455949319/_0xwiskP_400x400.jpg"),
+			SocialLinks: []models.SocialLink{
+				{
+					Platform: "twitter",
+					Url:      "https://twitter.com/DenysVitali",
+				},
+			},
+			Badges: []models.Badge{
+				{
+					Id:              "admin",
+					BackgroundColor: "#d70000",
+					TextColor:       "#ffffff",
+				},
+				{
+					Id:              "supporter",
+					BackgroundColor: "#ffde3f",
+					TextColor:       "#895900",
+				},
+			},
+			CreatedAt: time.Now(),
+		},
+	}
+
+	for _, u := range users {
+		tx := s.db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&u)
+		if tx.Error != nil {
+			s.logger.Fatalf("failed to create test users: %v", tx.Error)
+		}
+	}
 }

@@ -24,6 +24,6 @@ type User struct {
 	// A user might have multiple badges
 	Badges []Badge `json:"badges,omitempty" gorm:"many2many:user_badges;"`
 
-	AuthSubject string `json:"-" gorm:"uniqueIndex"`
-	Admin       bool   `json:"admin"`
+	AuthSubject *string `json:"-" gorm:"uniqueIndex"`
+	Admin       bool    `json:"admin"`
 }

@@ -435,7 +435,7 @@ func (s *Server) signupUsername(c *gin.Context) {
 	// Create a user with the username
 	user := models.User{
 		Username:    request.Username,
-		AuthSubject: idToken.Subject,
+		AuthSubject: &idToken.Subject,
 	}
 	tx := s.db.Create(&user)
 	if tx.Error != nil {
