@@ -8,10 +8,21 @@ import (
 func (s *Server) initRoutes() {
 	s.g.Use(gin.Recovery())
 	s.g.Use(gin.Logger())
-	s.g.Use(cors.Default())
+	s.g.Use(cors.New(cors.Config{
+		AllowAllOrigins:  true,
+		AllowCredentials: true,
+		AllowHeaders: []string{
+			"Origin", "Content-Length", "Content-Type", "Authorization",
+		},
+		AllowMethods: []string{
+			"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS",
+		},
+	}))
 	s.g.GET("/healthz", s.healthz)
 
 	g := s.g.Group("/api/v1")
+
+	g.Use(s.authMiddleware())
 
 	// Rings
 	g.GET("/r/:ring", s.getRing)
@@ -22,8 +33,13 @@ func (s *Server) initRoutes() {
 	g.GET("/posts/:id/comments", s.getComments)
 
 	// Users
+	g.GET("/users/me", s.getMe)
 	g.GET("/users/:username", s.getUser)
 	g.GET("/users/:username/profilePicture", s.getUserProfilePicture)
+
+	// SignUp
+	g.GET("/signup/usernameAvailability", s.usernameAvailability)
+	g.POST("/signup/username", s.signupUsername)
 
 	// Reddit-compatible API
 	s.g.GET("/r/:ring/hot.json", s.getRcRingHot)

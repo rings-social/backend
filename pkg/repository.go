@@ -52,3 +52,12 @@ func (s *Server) repoComments(postId uint, parentId *uint) ([]models.Comment, er
 	}
 	return comments, nil
 }
+
+func (s *Server) repoGetUserByAuthSubject(subject string) (*models.User, error) {
+	var user models.User
+	err := s.db.First(&user, "auth_subject = ?", subject).Error
+	if err != nil {
+		return nil, err
+	}
+	return &user, nil
+}

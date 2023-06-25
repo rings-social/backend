@@ -2,14 +2,19 @@ package server
 
 import (
 	"backend/pkg/models"
+	authenticator "backend/pkg/platform/auth"
 	"backend/pkg/reddit_compat"
+	"context"
 	"errors"
+	"fmt"
+	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 	"log"
+	"net/http"
 	"os"
 	"reflect"
 	"strings"
@@ -17,13 +22,20 @@ import (
 )
 
 type Server struct {
-	g       *gin.Engine
-	db      *gorm.DB
-	logger  *logrus.Logger
-	baseUrl string
+	g            *gin.Engine
+	db           *gorm.DB
+	logger       *logrus.Logger
+	baseUrl      string
+	authProvider *authenticator.Authenticator
 }
 
-func New(dsn string, baseUrl string) (*Server, error) {
+type Auth0Config struct {
+	Domain       string
+	ClientId     string
+	ClientSecret string
+}
+
+func New(dsn string, auth0Config Auth0Config, baseUrl string) (*Server, error) {
 	gormLogger := logger.New(
 		log.New(os.Stdout, "\r\n", log.LstdFlags), // io writer
 		logger.Config{
@@ -41,11 +53,17 @@ func New(dsn string, baseUrl string) (*Server, error) {
 		return nil, err
 	}
 
+	authProvider, err := authenticator.New(auth0Config.Domain, auth0Config.ClientId, auth0Config.ClientSecret)
+	if err != nil {
+		return nil, fmt.Errorf("unable to create authentication provider: %v", err)
+	}
+
 	s := Server{
-		g:       gin.New(),
-		db:      db,
-		logger:  logrus.New(),
-		baseUrl: baseUrl,
+		g:            gin.New(),
+		db:           db,
+		logger:       logrus.New(),
+		baseUrl:      baseUrl,
+		authProvider: authProvider,
 	}
 
 	s.initRoutes()
@@ -149,6 +167,39 @@ func (s *Server) getRingPosts(context *gin.Context) {
 	context.JSON(200, convertResponsePosts(posts, r))
 }
 
+func (s *Server) getMe(c *gin.Context) {
+	idToken, done := s.idToken(c)
+	if done {
+		return
+	}
+
+	user, err := s.repoGetUserByAuthSubject(idToken.Subject)
+	if err != nil {
+		s.handleUserError(c, err)
+		return
+	}
+	c.JSON(200, user)
+
+}
+
+func (s *Server) idToken(c *gin.Context) (*oidc.IDToken, bool) {
+	v, exists := c.Get("id_token")
+	if !exists {
+		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+			"error": "You must be authenticated to use this endpoint",
+		})
+		return nil, true
+	}
+
+	idToken, ok := v.(*oidc.IDToken)
+	if !ok {
+		s.logger.Errorf("Unable to cast id_token to *oidc.IDToken")
+		internalServerError(c)
+		return nil, true
+	}
+	return idToken, false
+}
+
 func (s *Server) getUser(context *gin.Context) {
 	username := context.Param("username")
 	if username == "" {
@@ -158,26 +209,35 @@ func (s *Server) getUser(context *gin.Context) {
 		return
 	}
 
+	user, err := s.repoGetUserByUsername(username)
+	if err != nil {
+		s.handleUserError(context, err)
+		return
+	}
+	context.JSON(200, user)
+}
+
+func (s *Server) handleUserError(context *gin.Context, err error) {
+	if err == gorm.ErrRecordNotFound {
+		context.AbortWithStatusJSON(404, gin.H{
+			"error": "User not found",
+		})
+		return
+	}
+	s.logger.Errorf("Unable to get user: %v", err)
+	context.AbortWithStatusJSON(500, gin.H{
+		"error": "Unable to get user",
+	})
+	return
+}
+
+func (s *Server) repoGetUserByUsername(username string) (models.User, error) {
 	var user models.User
 	tx := s.db.
 		Preload("SocialLinks").
 		Preload("Badges").
 		First(&user, "username = ?", username)
-	if tx.Error != nil {
-		if tx.Error == gorm.ErrRecordNotFound {
-			context.AbortWithStatusJSON(404, gin.H{
-				"error": "User not found",
-			})
-			return
-		}
-		s.logger.Errorf("Unable to get user %s: %v", username, tx.Error)
-		context.AbortWithStatusJSON(500, gin.H{
-			"error": "Unable to get user",
-		})
-		return
-	}
-
-	context.JSON(200, user)
+	return user, tx.Error
 }
 
 func (s *Server) getUserProfilePicture(context *gin.Context) {
@@ -287,6 +347,105 @@ func (s *Server) getRcRingsSearch(context *gin.Context) {
 	}
 
 	context.JSON(200, listing)
+}
+
+func (s *Server) authMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if c.Request.Header.Get("Authorization") == "" {
+			return
+		}
+
+		if strings.HasPrefix(c.Request.Header.Get("Authorization"), "Bearer ") {
+			// Parse Bearer token
+			token := strings.TrimPrefix(c.Request.Header.Get("Authorization"), "Bearer ")
+
+			idToken, err := s.authProvider.VerifyToken(context.Background(), token)
+			if err != nil {
+				s.logger.Errorf("Unable to verify ID token: %v", err)
+				c.AbortWithStatusJSON(401, gin.H{
+					"error": "Unable to verify ID token",
+				})
+				return
+			}
+
+			c.Set("id_token", idToken)
+		}
+	}
+}
+
+func (s *Server) usernameAvailability(c *gin.Context) {
+	usernameQuery := c.Query("username")
+	valid, err := validateUsername(usernameQuery)
+	if !valid {
+		c.AbortWithStatusJSON(400, gin.H{
+			"error": err,
+		})
+		return
+	}
+
+	// Check if username is available
+	tx := s.db.First(&models.User{}, "username = ?", usernameQuery)
+	if tx.Error != nil {
+		if tx.Error == gorm.ErrRecordNotFound {
+			c.JSON(200, gin.H{
+				"available": true,
+			})
+			return
+		}
+		s.logger.Errorf("Unable to check username availability: %v", tx.Error)
+		c.AbortWithStatusJSON(500, gin.H{
+			"error": "Unable to check username availability",
+		})
+		return
+	}
+
+	c.JSON(200, gin.H{
+		"available": false,
+	})
+}
+
+// signupUsername creates a user with the given username
+// and associates it with the ID token
+// It expects the username to be passed as a JSON body
+func (s *Server) signupUsername(c *gin.Context) {
+	idToken, done := s.idToken(c)
+	if done {
+		return
+	}
+
+	var request struct {
+		Username string `json:"username"`
+	}
+	err := c.BindJSON(&request)
+	if err != nil {
+		c.AbortWithStatusJSON(400, gin.H{
+			"error": "Username is required",
+		})
+		return
+	}
+
+	valid, errMsg := validateUsername(request.Username)
+	if !valid {
+		c.AbortWithStatusJSON(400, gin.H{
+			"error": errMsg,
+		})
+		return
+	}
+
+	// Create a user with the username
+	user := models.User{
+		Username:    request.Username,
+		AuthSubject: idToken.Subject,
+	}
+	tx := s.db.Create(&user)
+	if tx.Error != nil {
+		s.logger.Errorf("Unable to create user: %v", tx.Error)
+		c.AbortWithStatusJSON(500, gin.H{
+			"error": "Unable to create user",
+		})
+		return
+	}
+	c.JSON(http.StatusOK, user)
 }
 
 func parseNilAsEmpty[T any](element T) T {
