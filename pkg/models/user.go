@@ -1,7 +1,6 @@
 package models
 
 import (
-	"gorm.io/gorm"
 	"time"
 )
 
@@ -14,10 +13,16 @@ type SocialLink struct {
 
 type User struct {
 	// A user is a person who can post to rings.
-	Username    string         `json:"username" gorm:"primaryKey"`
-	DisplayName string         `json:"displayName"`
-	SocialLinks []SocialLink   `json:"socialLinks,omitempty" gorm:"foreignKey:Username;references:Username"`
-	CreatedAt   time.Time      `json:"createdAt" gorm:"autoCreateTime"`
-	DeletedAt   gorm.DeletedAt `json:"deletedAt"`
-	Posts       []Post         `json:"posts,omitempty" gorm:"foreignKey:AuthorUsername;references:Username"`
+	Username       string       `json:"username" gorm:"primaryKey"`
+	DisplayName    string       `json:"displayName"`
+	ProfilePicture *string      `json:"profilePicture"`
+	SocialLinks    []SocialLink `json:"socialLinks,omitempty" gorm:"foreignKey:Username;references:Username"`
+	CreatedAt      time.Time    `json:"createdAt" gorm:"autoCreateTime"`
+	DeletedAt      *time.Time   `json:"deletedAt,omitempty"`
+	Posts          []Post       `json:"posts,omitempty" gorm:"foreignKey:AuthorUsername;references:Username"`
+
+	// A user might have multiple badges
+	Badges []Badge `json:"badges,omitempty" gorm:"many2many:user_badges;"`
+
+	Admin bool `json:"admin"`
 }

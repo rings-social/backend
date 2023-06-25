@@ -7,6 +7,7 @@ import (
 )
 
 func (s *Server) fillTestData() {
+	slackLink := "https://join.slack.com/t/ringssocial/shared_invite/zt-1xyl4xys4-fhjfig1CqmALL~cWqiIGcQ"
 	s.db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&models.Ring{
 		Name:         "news",
 		Description:  "News from around the world",
@@ -28,6 +29,8 @@ func (s *Server) fillTestData() {
 	s.db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&models.User{
 		Username:    "random_dude",
 		DisplayName: "Random Dude",
+		// ProfilePicture: createRefString("https://images.unsplash.com/photo-1596075780750-81249df16d19?fit=crop&w=200&q=80"),
+		ProfilePicture: nil,
 		SocialLinks: []models.SocialLink{
 			{
 				Platform: "twitter",
@@ -38,8 +41,35 @@ func (s *Server) fillTestData() {
 	})
 
 	s.db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&models.User{
-		Username:    "john_doe",
-		DisplayName: "John Doe",
+		Username:       "denvit",
+		DisplayName:    "Denys Vitali",
+		Admin:          true,
+		ProfilePicture: createRefString("https://pbs.twimg.com/profile_images/1441455322455949319/_0xwiskP_400x400.jpg"),
+		SocialLinks: []models.SocialLink{
+			{
+				Platform: "twitter",
+				Url:      "https://twitter.com/DenysVitali",
+			},
+		},
+		Badges: []models.Badge{
+			{
+				Id:              "admin",
+				BackgroundColor: "#d70000",
+				TextColor:       "#ffffff",
+			},
+			{
+				Id:              "supporter",
+				BackgroundColor: "#ffde3f",
+				TextColor:       "#895900",
+			},
+		},
+		CreatedAt: time.Now(),
+	})
+
+	s.db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&models.User{
+		Username:       "john_doe",
+		DisplayName:    "John Doe",
+		ProfilePicture: createRefString("https://images.unsplash.com/photo-1590086782792-42dd2350140d?fit=crop&w=200&q=80"),
 		SocialLinks: []models.SocialLink{
 			{
 				Platform: "twitter",
@@ -99,10 +129,36 @@ func (s *Server) fillTestData() {
 		Nsfw:           false,
 	}
 
+	introductionPost := models.Post{
+		Model:          models.Model{ID: 5, CreatedAt: time.Now()},
+		AuthorUsername: "denvit",
+		RingName:       "popular",
+		Title:          "Welcome to the Rings.social",
+		Link:           createRefString("/about"),
+		Domain:         createRefString("rings.social"),
+		Score:          10,
+		CommentsCount:  1,
+		Nsfw:           false,
+	}
+
+	notVisitedPost := models.Post{
+		Model:          models.Model{ID: 6, CreatedAt: time.Now()},
+		AuthorUsername: "denvit",
+		RingName:       "popular",
+		Title:          "Do not click me",
+		Link:           createRefString("https://www.youtube.com/watch?v=dQw4w9WgXcQ"),
+		Domain:         createRefString("youtube.com"),
+		Score:          -1,
+		CommentsCount:  0,
+		Nsfw:           false,
+	}
+
 	err := s.createOrUpdatePosts([]models.Post{popularPost,
 		textPost,
 		nsfwPost,
 		newsPost,
+		introductionPost,
+		notVisitedPost,
 	})
 
 	if err != nil {
@@ -138,6 +194,27 @@ func (s *Server) fillTestData() {
 		Ups:            0,
 		Downs:          1,
 	})
+
+	s.db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&models.Comment{
+		Model:          models.Model{ID: 4, CreatedAt: time.Now()},
+		AuthorUsername: "denvit",
+		PostId:         introductionPost.ID,
+		Ups:            5,
+		Downs:          0,
+		Score:          5,
+		Body: "To learn more about Rings, check out the [about page](/about).  \n\n" +
+			"If you want to contribute to the project, check out [GitHub organization](https://github.com/rings-social)" +
+			" and [join our Slack channel](" + slackLink + ").  \n\n" +
+			"By the way, did you know that our comments support markdown? **Bold**, _italic_, `preformat`\n" +
+			"<script>alert('hello')</script>\n" +
+			"```js\n" +
+			"console.log('hello')\n" +
+			"```\n",
+	})
+}
+
+func createRefString(s string) *string {
+	return &s
 }
 
 func (s *Server) createOrUpdatePosts(posts []models.Post) error {

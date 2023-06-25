@@ -69,7 +69,15 @@ func (s *Server) retrieveComments(c *gin.Context, postId int64, parentId *uint) 
 			internalServerError(c)
 			return nil, true
 		}
+		comments[k].Depth = 0
+		setDepth(childComments, comments[k].Depth+1)
 		comments[k].Replies = childComments
 	}
 	return comments, false
+}
+
+func setDepth(comments []models.Comment, i int) {
+	for k, _ := range comments {
+		comments[k].Depth = i
+	}
 }

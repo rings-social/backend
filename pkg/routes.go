@@ -21,6 +21,10 @@ func (s *Server) initRoutes() {
 	g.GET("/posts/:id", s.getPost)
 	g.GET("/posts/:id/comments", s.getComments)
 
+	// Users
+	g.GET("/users/:username", s.getUser)
+	g.GET("/users/:username/profilePicture", s.getUserProfilePicture)
+
 	// Reddit-compatible API
 	s.g.GET("/r/:ring/hot.json", s.getRcRingHot)
 	s.g.GET("/r/:ring/about.json", s.getRcRingAbout)
@@ -28,6 +32,6 @@ func (s *Server) initRoutes() {
 	s.g.GET("/subreddits/search.json", s.getRcRingsSearch)
 
 	// Users
-	g.GET("/u/:user", s.getUser)
+	g.GET("/u/:username", s.getUser)
 
 }

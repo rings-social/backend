@@ -134,7 +134,9 @@ func (s *Server) getRingPosts(context *gin.Context) {
 	}
 
 	var posts []models.Post
-	tx := s.db.Order("score desc").
+	tx := s.db.
+		Preload("Author").
+		Order("score desc").
 		Find(&posts, "ring_name = ?", ringName)
 	if tx.Error != nil {
 		s.logger.Errorf("Unable to get posts for %s: %v", ringName, tx.Error)
@@ -148,7 +150,7 @@ func (s *Server) getRingPosts(context *gin.Context) {
 }
 
 func (s *Server) getUser(context *gin.Context) {
-	username := context.Param("user")
+	username := context.Param("username")
 	if username == "" {
 		context.AbortWithStatusJSON(400, gin.H{
 			"error": "Username is required",
@@ -157,7 +159,10 @@ func (s *Server) getUser(context *gin.Context) {
 	}
 
 	var user models.User
-	tx := s.db.Preload("SocialLinks").First(&user, "username = ?", username)
+	tx := s.db.
+		Preload("SocialLinks").
+		Preload("Badges").
+		First(&user, "username = ?", username)
 	if tx.Error != nil {
 		if tx.Error == gorm.ErrRecordNotFound {
 			context.AbortWithStatusJSON(404, gin.H{
@@ -173,6 +178,39 @@ func (s *Server) getUser(context *gin.Context) {
 	}
 
 	context.JSON(200, user)
+}
+
+func (s *Server) getUserProfilePicture(context *gin.Context) {
+	username := context.Param("username")
+	if username == "" {
+		context.AbortWithStatusJSON(400, gin.H{
+			"error": "Username is required",
+		})
+		return
+	}
+
+	var user models.User
+	tx := s.db.First(&user, "username = ?", username)
+	if tx.Error != nil {
+		if tx.Error == gorm.ErrRecordNotFound {
+			context.AbortWithStatusJSON(404, gin.H{
+				"error": "User not found",
+			})
+			return
+		}
+		s.logger.Errorf("Unable to get user %s: %v", username, tx.Error)
+		context.AbortWithStatusJSON(500, gin.H{
+			"error": "Unable to get user",
+		})
+		return
+	}
+
+	if user.ProfilePicture == nil {
+		context.Redirect(302, s.baseUrl+"/default-profile-picture.jpg")
+		return
+	}
+
+	context.Redirect(302, *user.ProfilePicture)
 }
 
 func (s *Server) getRcRingHot(context *gin.Context) {

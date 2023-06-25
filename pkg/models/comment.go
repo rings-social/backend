@@ -18,5 +18,6 @@ type Comment struct {
 	Downs uint   `json:"downs"`
 	Score int    `json:"score"`
 
+	Depth   int       `json:"depth" gorm:"-"`
 	Replies []Comment `json:"replies" gorm:"-"`
 }
