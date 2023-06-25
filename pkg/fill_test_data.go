@@ -194,7 +194,7 @@ func (s *Server) fillTestUsers() {
 		{
 			Username:       "john_doe",
 			DisplayName:    "John Doe",
-			ProfilePicture: createRefString("https://images.unsplash.com/photo-1590086782793-42dd2350140d?fit=crop&w=200&q=80"),
+			ProfilePicture: createRefString("https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?fit=crop&w=200&q=80"),
 			SocialLinks: []models.SocialLink{
 				{
 					Platform: "twitter",
