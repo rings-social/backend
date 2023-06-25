@@ -10,6 +10,8 @@ processes = []
 [env]
   RINGS_LISTEN_ADDR = "0.0.0.0:8080"
   RINGS_BASE_URL = "https://rings.social"
+  AUTH0_CLIENT_ID = "xTK0dWY5c34jnyfRtOd8LY7fQdmdzf1T"
+  AUTH0_DOMAIN = "rings.eu.auth0.com"
 
 [[services]]
   internal_port = 8080
