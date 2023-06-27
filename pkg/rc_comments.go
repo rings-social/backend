@@ -41,7 +41,7 @@ func (s *Server) getRcComments(c *gin.Context) {
 		parentId = &parentIdUint
 	}
 
-	comments, done := s.retrieveComments(c, postId, parentId)
+	comments, done := s.retrieveComments(c, postId, parentId, map[uint]models.CommentAction{})
 	if done {
 		return
 	}
@@ -56,13 +56,20 @@ func (s *Server) getRcComments(c *gin.Context) {
 	c.JSON(200, redditComments)
 }
 
-func (s *Server) retrieveComments(c *gin.Context, postId int64, parentId *uint) ([]models.Comment, bool) {
+func (s *Server) retrieveComments(
+	c *gin.Context,
+	postId int64,
+	parentId *uint,
+	commentActions map[uint]models.CommentAction,
+) ([]models.Comment, bool) {
 	comments, err := s.repoComments(uint(postId), parentId)
 	if err != nil {
 		s.logger.Errorf("unable to get comments for post %d: %v", postId, err)
 		internalServerError(c)
 		return nil, true
 	}
+	comments = setCommentActions(comments, commentActions)
+	comments = maskDeletedComments(comments)
 
 	for k, comment := range comments {
 		childComments, err := s.repoComments(uint(postId), &comment.ID)
@@ -71,11 +78,30 @@ func (s *Server) retrieveComments(c *gin.Context, postId int64, parentId *uint) 
 			internalServerError(c)
 			return nil, true
 		}
+
+		childComments = setCommentActions(childComments, commentActions)
+
+		maskedChildComments := maskDeletedComments(childComments)
 		comments[k].Depth = 0
-		setDepth(childComments, comments[k].Depth+1)
-		comments[k].Replies = childComments
+		setDepth(maskedChildComments, comments[k].Depth+1)
+		comments[k].Replies = maskedChildComments
 	}
 	return comments, false
+}
+
+func setCommentActions(comments []models.Comment, actions map[uint]models.CommentAction) []models.Comment {
+	for k, v := range comments {
+		action, ok := actions[v.ID]
+		if ok {
+			switch action.Action {
+			case models.ActionDownvote:
+				comments[k].VotedDown = true
+			case models.ActionUpvote:
+				comments[k].VotedUp = true
+			}
+		}
+	}
+	return comments
 }
 
 func setDepth(comments []models.Comment, i int) {

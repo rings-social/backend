@@ -20,4 +20,8 @@ type Comment struct {
 
 	Depth   int       `json:"depth" gorm:"-"`
 	Replies []Comment `json:"replies" gorm:"-"`
+
+	// Dynamic
+	VotedUp   bool `json:"votedUp" gorm:"-"`
+	VotedDown bool `json:"votedDown" gorm:"-"`
 }

@@ -13,6 +13,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 	"gorm.io/gorm/logger"
 	"log"
 	"net/http"
@@ -73,7 +74,7 @@ func New(dsn string, auth0Config Auth0Config, baseUrl string) (*Server, error) {
 		return nil, err
 	}
 
-	s.fillTestData()
+	// s.fillTestData()
 	return &s, nil
 }
 
@@ -125,12 +126,27 @@ func (s *Server) getRing(context *gin.Context) {
 
 func (s *Server) initModels() error {
 	// Auto-migrate all the models in `models`
+	// Check if the comment_action enum exists
+	var commentActionExists bool
+	tx := s.db.Raw("SELECT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'comment_action');").Scan(&commentActionExists)
+	if tx.Error != nil {
+		return tx.Error
+	}
+
+	if !commentActionExists {
+		tx := s.db.Exec("CREATE TYPE comment_action AS ENUM ('upvote', 'downvote');")
+		if tx.Error != nil {
+			return tx.Error
+		}
+	}
+
 	return s.db.AutoMigrate(
 		&models.Comment{},
 		&models.Post{},
 		&models.Ring{},
 		&models.User{},
 		&models.SocialLink{},
+		&models.CommentAction{},
 	)
 }
 
@@ -470,7 +486,22 @@ func (s *Server) addComment(postId uint, username string, request request.Commen
 		ParentId:       request.ParentId,
 	}
 
+	if request.ParentId != nil {
+		// Get original parent comment
+		var parentComment models.Comment
+		tx := s.db.First(&parentComment, "id = ?", request.ParentId)
+		if tx.Error != nil {
+			return comment, tx.Error
+		}
+
+		comment.Depth = parentComment.Depth + 1
+	}
+
 	tx := s.db.Create(&comment)
+	if tx.Error == nil {
+		// Fetch comment with Preload("Author")
+		tx = s.db.Preload("Author").First(&comment, comment.ID)
+	}
 	return comment, tx.Error
 }
 
@@ -483,6 +514,88 @@ func (s *Server) isAdmin(username string) bool {
 	}
 
 	return user.Admin
+}
+
+func (s *Server) repoCommentVoteAction(commentId uint, username string, action models.VoteAction) (models.CommentAction, int, error) {
+	commentAction := models.CommentAction{
+		Username:  username,
+		CommentId: commentId,
+		Action:    action,
+	}
+	addScore := 0
+
+	// Check if user has already voted
+	var existingAction models.CommentAction
+	tx := s.db.First(&existingAction, "username = ? AND comment_id = ?", username, commentId)
+	if tx.Error == nil {
+		if action == existingAction.Action {
+			// User has already voted
+			return commentAction, 0, fmt.Errorf("user has already voted")
+		}
+
+		// User has changed their vote
+		if existingAction.Action == models.ActionUpvote && action == models.ActionDownvote {
+			addScore = -2
+		} else if existingAction.Action == models.ActionDownvote && action == models.ActionUpvote {
+			addScore = 2
+		}
+	} else {
+		if errors.Is(tx.Error, gorm.ErrRecordNotFound) {
+			if action == models.ActionUpvote {
+				addScore = 1
+			} else if action == models.ActionDownvote {
+				addScore = -1
+			}
+		}
+	}
+
+	tx = s.db.Clauses(
+		clause.OnConflict{
+			Columns:   []clause.Column{{Name: "username"}, {Name: "comment_id"}},
+			DoUpdates: clause.AssignmentColumns([]string{"action"}),
+		},
+	).Create(&commentAction)
+	return commentAction, addScore, tx.Error
+}
+
+func (s *Server) repoDownvoteComment(commentId uint, username string) (models.CommentAction, error) {
+	commentAction := models.CommentAction{
+		Username:  username,
+		CommentId: commentId,
+		Action:    models.ActionDownvote,
+	}
+	tx := s.db.Clauses(
+		clause.OnConflict{
+			Columns:   []clause.Column{{Name: "username"}, {Name: "comment_id"}},
+			DoUpdates: clause.AssignmentColumns([]string{"action"}),
+		},
+	).Create(&commentAction)
+	return commentAction, tx.Error
+}
+
+func (s *Server) repoIncreaseCommentScore(commentId uint, amount int) error {
+	tx := s.db.Model(&models.Comment{}).
+		Where("id = ?", commentId).
+		UpdateColumn("score", gorm.Expr("score + ?", amount))
+	return tx.Error
+}
+
+func (s *Server) hasIdToken(c *gin.Context) bool {
+	_, exists := c.Get("id_token")
+	return exists
+}
+
+func (s *Server) repoCommentActions(username string, postId int64) []models.CommentAction {
+	var commentActions []models.CommentAction
+	tx := s.db.Model(&models.CommentAction{}).
+		Where("username = ?", username).
+		Joins("JOIN comments ON comments.id = comment_actions.comment_id").
+		Where("comments.post_id = ?", postId).
+		Find(&commentActions)
+	if tx.Error != nil {
+		return []models.CommentAction{}
+	}
+	return commentActions
 }
 
 func parseNilAsEmpty[T any](element T) T {
