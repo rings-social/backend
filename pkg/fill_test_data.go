@@ -160,6 +160,8 @@ func (s *Server) fillTestData() {
 			"console.log('hello')\n" +
 			"```\n",
 	})
+
+	s.db.Exec("ALTER SEQUENCE comments_id_seq RESTART WITH 5;")
 }
 
 func createRefString(s string) *string {
@@ -177,6 +179,7 @@ func (s *Server) createOrUpdatePosts(posts []models.Post) error {
 }
 
 func (s *Server) fillTestUsers() {
+	authSubj := "auth0|6498715e20e9a839adbfee8e"
 	users := []models.User{
 		{
 			Username:    "random_dude",
@@ -214,6 +217,7 @@ func (s *Server) fillTestUsers() {
 					Url:      "https://twitter.com/DenysVitali",
 				},
 			},
+			AuthSubject: &authSubj,
 			Badges: []models.Badge{
 				{
 					Id:              "admin",

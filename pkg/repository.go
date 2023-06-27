@@ -3,6 +3,7 @@ package server
 import (
 	"backend/pkg/models"
 	"gorm.io/gorm/clause"
+	"time"
 )
 
 func (s *Server) repoRingPosts(ringName string) ([]models.Post, error) {
@@ -51,6 +52,19 @@ func (s *Server) repoComments(postId uint, parentId *uint) ([]models.Comment, er
 		return nil, err
 	}
 	return comments, nil
+}
+
+func (s *Server) repoComment(commentId uint) (models.Comment, error) {
+	var comment models.Comment
+	tx := s.db.Preload("Author").First(&comment, "id = ?", commentId)
+	return comment, tx.Error
+}
+
+func (s *Server) repoDeleteComment(commentId uint) error {
+	tx := s.db.Model(&models.Comment{}).
+		Where("id = ?", commentId).
+		Update("deleted_at", time.Now())
+	return tx.Error
 }
 
 func (s *Server) repoGetUserByAuthSubject(subject string) (*models.User, error) {

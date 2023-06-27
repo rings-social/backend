@@ -46,6 +46,8 @@ func (s *Server) getRcComments(c *gin.Context) {
 		return
 	}
 
+	comments = maskDeletedComments(comments)
+
 	redditComments, err := toRedditComments(post, comments, s.baseUrl)
 	if err != nil {
 		internalServerError(c)

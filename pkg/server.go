@@ -4,6 +4,7 @@ import (
 	"backend/pkg/models"
 	authenticator "backend/pkg/platform/auth"
 	"backend/pkg/reddit_compat"
+	"backend/pkg/request"
 	"context"
 	"errors"
 	"fmt"
@@ -446,6 +447,42 @@ func (s *Server) signupUsername(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, user)
+}
+
+func (s *Server) usernameForIdToken(token *oidc.IDToken) (string, error) {
+	if token == nil {
+		return "", fmt.Errorf("token is nil")
+	}
+	var user models.User
+	tx := s.db.First(&user, "auth_subject = ?", token.Subject)
+	if tx.Error != nil {
+		return "", tx.Error
+	}
+	return user.Username, nil
+}
+
+func (s *Server) addComment(postId uint, username string, request request.Comment) (models.Comment, error) {
+	// TODO: Check if user can comment here
+	comment := models.Comment{
+		PostId:         postId,
+		Body:           request.Content,
+		AuthorUsername: username,
+		ParentId:       request.ParentId,
+	}
+
+	tx := s.db.Create(&comment)
+	return comment, tx.Error
+}
+
+func (s *Server) isAdmin(username string) bool {
+	var user models.User
+	tx := s.db.First(&user, "username = ?", username)
+	if tx.Error != nil {
+		// Cannot be found / other error
+		return false
+	}
+
+	return user.Admin
 }
 
 func parseNilAsEmpty[T any](element T) T {
