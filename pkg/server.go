@@ -21,6 +21,7 @@ import (
 	"reflect"
 	"strings"
 	"time"
+	"unicode"
 )
 
 type Server struct {
@@ -122,6 +123,65 @@ func (s *Server) getRing(context *gin.Context) {
 	}
 
 	context.JSON(200, ring)
+}
+
+func (s *Server) createRing(c *gin.Context) {
+	username, exists := c.Get("username")
+	if !exists {
+		return
+	}
+
+	ringName := c.Param("ring")
+	isValidRingName := validateRingName(ringName)
+	if !isValidRingName {
+		c.AbortWithStatusJSON(http.StatusBadRequest,
+			gin.H{"error": "Invalid ring name"},
+		)
+		return
+	}
+
+	var ringRequest request.CreateRingRequest
+	err := c.BindJSON(&ringRequest)
+	if err != nil {
+		c.AbortWithStatusJSON(400, gin.H{
+			"error": "Invalid request body",
+		})
+		return
+	}
+
+	ring := models.Ring{
+		Name:          ringName,
+		Description:   ringRequest.Description,
+		OwnerUsername: username.(string),
+		PrimaryColor:  ringRequest.Color,
+	}
+
+	tx := s.db.Create(&ring)
+	if tx.Error != nil {
+		s.logger.Errorf("Unable to create ring: %v", tx.Error)
+		c.AbortWithStatusJSON(500, gin.H{
+			"error": "Unable to create ring",
+		})
+		return
+	}
+
+	c.JSON(200, ring)
+}
+
+func validateRingName(name string) bool {
+	if len(name) < 3 || len(name) > 20 {
+		return false
+	}
+
+	// Make sure the ring name is lowercase and can only contain
+	// letters, numbers, and underscores
+	for _, c := range name {
+		if !unicode.IsLetter(c) && !unicode.IsNumber(c) && c != '_' {
+			return false
+		}
+	}
+
+	return true
 }
 
 func (s *Server) initModels() error {
@@ -499,6 +559,16 @@ func (s *Server) addComment(postId uint, username string, request request.Commen
 
 	tx := s.db.Create(&comment)
 	if tx.Error == nil {
+		// Add +1 to comment count in post
+		tx = s.db.Model(&models.Post{}).
+			Where("id = ?", postId).
+			Update("comments_count",
+				gorm.Expr("comments_count + ?", 1),
+			)
+		if tx.Error != nil {
+			return comment, tx.Error
+		}
+
 		// Fetch comment with Preload("Author")
 		tx = s.db.Preload("Author").First(&comment, comment.ID)
 	}
@@ -596,6 +666,31 @@ func (s *Server) repoCommentActions(username string, postId int64) []models.Comm
 		return []models.CommentAction{}
 	}
 	return commentActions
+}
+
+func (s *Server) authenticatedUser(c *gin.Context) {
+	if !s.hasIdToken(c) {
+		c.JSON(http.StatusForbidden, gin.H{
+			"error": "Not authenticated",
+		})
+		return
+	}
+
+	idToken, done := s.idToken(c)
+	if done {
+		return
+	}
+
+	// Make sure the user exists in the database
+	username, err := s.usernameForIdToken(idToken)
+	if err != nil {
+		c.JSON(http.StatusForbidden, gin.H{
+			"error": "Not authenticated",
+		})
+		return
+	}
+
+	c.Set("username", username)
 }
 
 func parseNilAsEmpty[T any](element T) T {

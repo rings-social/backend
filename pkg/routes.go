@@ -27,6 +27,7 @@ func (s *Server) initRoutes() {
 	// Rings
 	g.GET("/r/:ring", s.getRing)
 	g.GET("/r/:ring/posts", s.getRingPosts)
+	g.POST("/r/:ring", s.authenticatedUser, s.createRing)
 
 	// Posts
 	g.GET("/posts/:id", s.getPost)
