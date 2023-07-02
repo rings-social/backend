@@ -14,8 +14,8 @@ type PostCreate struct {
 }
 
 func (c PostCreate) Validate() error {
-	// Titles can be maximum 60 characters
-	if len(c.Title) > 60 {
+	// Titles can be maximum 300 characters
+	if len(c.Title) > 300 {
 		return fmt.Errorf("title cannot be longer than 60 characters")
 	}
 
