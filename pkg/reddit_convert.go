@@ -82,6 +82,7 @@ func toRedditSubreddits(rings []models.Ring) (RedditSubreddits, error) {
 	for _, ring := range rings {
 		red := "#FF0000"
 		iconImg := "https://a.thumbs.redditmedia.com/E0Bkwgwe5TkVLflBA7WMe9fMSC7DV2UOeff-UpNJeb0.png"
+		subscribers := int(ring.Subscribers)
 		s := reddit_compat.KindData[reddit_compat.Subreddit]{
 			Kind: "t5",
 			Data: reddit_compat.Subreddit{
@@ -95,7 +96,7 @@ func toRedditSubreddits(rings []models.Ring) (RedditSubreddits, error) {
 				DisplayNamePrefixed:   "r/" + ring.Name,
 				BannerBackgroundColor: &red,
 				IconImg:               &iconImg,
-				Subscribers:           &ring.Subscribers,
+				Subscribers:           &subscribers,
 			},
 		}
 		listing.Data.Children = append(listing.Data.Children, s)
@@ -105,6 +106,7 @@ func toRedditSubreddits(rings []models.Ring) (RedditSubreddits, error) {
 }
 
 func toRingAbout(ring *models.Ring) RedditAbout {
+	subscribers := int(ring.Subscribers)
 	return RedditAbout{
 		Kind: "t5",
 		Data: reddit_compat.SubredditDetails{
@@ -116,7 +118,7 @@ func toRingAbout(ring *models.Ring) RedditAbout {
 			Over18:              ring.Nsfw,
 			URL:                 "/r/" + ring.Name,
 			DisplayNamePrefixed: "r/" + ring.Name,
-			Subscribers:         ring.Subscribers,
+			Subscribers:         subscribers,
 			DescriptionHtml:     ring.Description,
 			Created:             int(ring.CreatedAt.Unix()),
 			CreatedUtc:          int(ring.CreatedAt.UTC().Unix()),

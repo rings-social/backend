@@ -14,8 +14,8 @@ type Ring struct {
 	CreatedAt     time.Time  `json:"createdAt" gorm:"autoCreateTime"`
 	DeletedAt     *time.Time `json:"deletedAt,omitempty"`
 	Nsfw          bool       `json:"nsfw"`
-	Subscribers   int        `json:"subscribers"`
 	PrimaryColor  string     `json:"primaryColor"`
 	OwnerUsername string     `json:"ownerUsername"`
-	Owner         User       `json:"owner,omitempty" gorm:"foreignKey:OwnerUsername;references:Username"`
+	Owner         *User      `json:"owner,omitempty" gorm:"foreignKey:OwnerUsername;references:Username"`
+	Subscribers   uint64     `json:"subscribers"`
 }

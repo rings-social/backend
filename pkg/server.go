@@ -39,7 +39,7 @@ type Auth0Config struct {
 	ClientSecret string
 }
 
-func New(dsn string, auth0Config Auth0Config, baseUrl string) (*Server, error) {
+func New(dsn string, auth0Config *Auth0Config, baseUrl string) (*Server, error) {
 	gormLogger := logger.New(
 		log.New(os.Stdout, "\r\n", log.LstdFlags), // io writer
 		logger.Config{
@@ -57,17 +57,18 @@ func New(dsn string, auth0Config Auth0Config, baseUrl string) (*Server, error) {
 		return nil, err
 	}
 
-	authProvider, err := authenticator.New(auth0Config.Domain, auth0Config.ClientId, auth0Config.ClientSecret)
-	if err != nil {
-		return nil, fmt.Errorf("unable to create authentication provider: %v", err)
-	}
-
 	s := Server{
-		g:            gin.New(),
-		db:           db,
-		logger:       logrus.New(),
-		baseUrl:      baseUrl,
-		authProvider: authProvider,
+		g:       gin.New(),
+		db:      db,
+		logger:  logrus.New(),
+		baseUrl: baseUrl,
+	}
+	if auth0Config != nil {
+		authProvider, err := authenticator.New(auth0Config.Domain, auth0Config.ClientId, auth0Config.ClientSecret)
+		if err != nil {
+			return nil, fmt.Errorf("unable to create authentication provider: %v", err)
+		}
+		s.authProvider = authProvider
 	}
 
 	s.initRoutes()
@@ -94,79 +95,6 @@ func (s *Server) healthz(context *gin.Context) {
 	context.JSON(200, gin.H{
 		"status": "ok",
 	})
-}
-
-func (s *Server) getRing(context *gin.Context) {
-	ringName := context.Param("ring")
-	if ringName == "" {
-		context.AbortWithStatusJSON(400, gin.H{
-			"error": "Ring name is required",
-		})
-		return
-	}
-
-	var ring models.Ring
-	tx := s.db.First(&ring, "name = ?", ringName)
-	if tx.Error != nil {
-		// If tx reports not found:
-		if tx.Error == gorm.ErrRecordNotFound {
-			context.AbortWithStatusJSON(404, gin.H{
-				"error": "Ring not found",
-			})
-			return
-		}
-		// Otherwise, it's an internal error:
-		s.logger.Errorf("Unable to get ring %s: %v", ringName, tx.Error)
-		context.AbortWithStatusJSON(500, gin.H{
-			"error": "Unable to get ring",
-		})
-		return
-	}
-
-	context.JSON(200, ring)
-}
-
-func (s *Server) createRing(c *gin.Context) {
-	username, exists := c.Get("username")
-	if !exists {
-		return
-	}
-
-	ringName := c.Param("ring")
-	isValidRingName := validateRingName(ringName)
-	if !isValidRingName {
-		c.AbortWithStatusJSON(http.StatusBadRequest,
-			gin.H{"error": "Invalid ring name"},
-		)
-		return
-	}
-
-	var ringRequest request.CreateRingRequest
-	err := c.BindJSON(&ringRequest)
-	if err != nil {
-		c.AbortWithStatusJSON(400, gin.H{
-			"error": "Invalid request body",
-		})
-		return
-	}
-
-	ring := models.Ring{
-		Name:          ringName,
-		Description:   ringRequest.Description,
-		OwnerUsername: username.(string),
-		PrimaryColor:  ringRequest.Color,
-	}
-
-	tx := s.db.Create(&ring)
-	if tx.Error != nil {
-		s.logger.Errorf("Unable to create ring: %v", tx.Error)
-		c.AbortWithStatusJSON(500, gin.H{
-			"error": "Unable to create ring",
-		})
-		return
-	}
-
-	c.JSON(200, ring)
 }
 
 func validateRingName(name string) bool {
@@ -410,7 +338,7 @@ func (s *Server) getRcRingsSearch(context *gin.Context) {
 		includeNsfw = true
 	}
 
-	rings, err := s.repoRingsSearch(q, includeNsfw)
+	rings, err := s.repoRingsSearch(q, includeNsfw, "", 25)
 	if err != nil {
 		s.logger.Errorf("unable to search rings: %v", err)
 		internalServerError(context)
@@ -435,9 +363,13 @@ func (s *Server) authMiddleware() gin.HandlerFunc {
 		}
 
 		if strings.HasPrefix(c.Request.Header.Get("Authorization"), "Bearer ") {
+			if s.authProvider == nil {
+				s.logger.Warnf("running without auth provider, but auth token provided")
+				return
+			}
+
 			// Parse Bearer token
 			token := strings.TrimPrefix(c.Request.Header.Get("Authorization"), "Bearer ")
-
 			idToken, err := s.authProvider.VerifyToken(context.Background(), token)
 			if err != nil {
 				s.logger.Errorf("Unable to verify ID token: %v", err)

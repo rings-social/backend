@@ -26,9 +26,10 @@ func (s *Server) initRoutes() {
 	g.Use(s.authMiddleware())
 
 	// Rings
-	g.GET("/r/:ring", s.getRing)
+	g.GET("/rings", s.routeGetRings)
+	g.GET("/r/:ring", s.routeGetRing)
 	g.GET("/r/:ring/posts", s.getRingPosts)
-	g.POST("/r/:ring", s.authenticatedUser, s.createRing)
+	g.POST("/r/:ring", s.authenticatedUser, s.routeCreateRing)
 
 	// Posts
 	g.POST("/posts", s.authenticatedUser, s.createPost)

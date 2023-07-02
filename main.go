@@ -26,7 +26,7 @@ func main() {
 func runMain() {
 	arg.MustParse(&args)
 
-	s, err := server.New(args.DatabaseUrl, server.Auth0Config{
+	s, err := server.New(args.DatabaseUrl, &server.Auth0Config{
 		Domain:       args.Auth0Domain,
 		ClientId:     args.Auth0ClientId,
 		ClientSecret: args.Auth0ClientSecret,

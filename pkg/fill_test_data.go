@@ -13,7 +13,7 @@ func (s *Server) fillTestData() {
 		Description:  "News from around the world",
 		DisplayName:  "News",
 		Title:        "Title",
-		Subscribers:  3094892,
+		Subscribers:  1000,
 		CreatedAt:    time.Now(),
 		PrimaryColor: "#FFC107",
 	})
@@ -22,7 +22,7 @@ func (s *Server) fillTestData() {
 		Name:         "popular",
 		Description:  "Popular Posts",
 		CreatedAt:    time.Now(),
-		Subscribers:  139843,
+		Subscribers:  2000,
 		PrimaryColor: "#49545f",
 	})
 
