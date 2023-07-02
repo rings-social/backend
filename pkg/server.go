@@ -232,7 +232,8 @@ func (s *Server) getRingPosts(context *gin.Context) {
 	var posts []models.Post
 	tx := s.db.
 		Preload("Author").
-		Order("score desc").
+		Limit(100).
+		Order("score desc, created_at DESC").
 		Find(&posts, "ring_name = ?", ringName)
 	if tx.Error != nil {
 		s.logger.Errorf("Unable to get posts for %s: %v", ringName, tx.Error)
