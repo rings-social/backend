@@ -8,7 +8,9 @@ import (
 
 func (s *Server) repoRingPosts(ringName string) ([]models.Post, error) {
 	var ring models.Ring
-	err := s.db.Preload(clause.Associations).First(&ring, "name = ?", ringName).Error
+	err := s.db.
+		Limit(100).
+		Preload(clause.Associations).First(&ring, "name = ?", ringName).Error
 	if err != nil {
 		return nil, err
 	}
@@ -37,7 +39,9 @@ func (s *Server) repoRingAbout(ringName string) (*models.Ring, error) {
 func (s *Server) repoComments(postId uint, parentId *uint) ([]models.Comment, error) {
 	var comments []models.Comment
 
-	tx := s.db.Preload("Author").Order("score desc")
+	tx := s.db.
+		Limit(200).
+		Preload("Author").Order("score desc")
 	var err error
 	if parentId == nil {
 		// Postgres doesn't like to compare NULLs with =, so we have to do this.
