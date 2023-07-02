@@ -669,31 +669,6 @@ func (s *Server) repoCommentActions(username string, postId int64) []models.Comm
 	return commentActions
 }
 
-func (s *Server) authenticatedUser(c *gin.Context) {
-	if !s.hasIdToken(c) {
-		c.JSON(http.StatusForbidden, gin.H{
-			"error": "Not authenticated",
-		})
-		return
-	}
-
-	idToken, done := s.idToken(c)
-	if done {
-		return
-	}
-
-	// Make sure the user exists in the database
-	username, err := s.usernameForIdToken(idToken)
-	if err != nil {
-		c.JSON(http.StatusForbidden, gin.H{
-			"error": "Not authenticated",
-		})
-		return
-	}
-
-	c.Set("username", username)
-}
-
 // getUsers returns a paginated list of users
 func (s *Server) getUsers(c *gin.Context) {
 	var users []models.User

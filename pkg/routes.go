@@ -31,6 +31,7 @@ func (s *Server) initRoutes() {
 	g.POST("/r/:ring", s.authenticatedUser, s.createRing)
 
 	// Posts
+	g.POST("/posts", s.authenticatedUser, s.createPost)
 	g.GET("/posts/:id", s.getPost)
 	g.GET("/posts/:id/comments", s.getComments)
 	g.POST("/posts/:id/comments", s.postComment)
