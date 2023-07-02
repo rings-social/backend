@@ -19,6 +19,7 @@ func (s *Server) initRoutes() {
 		},
 	}))
 	s.g.GET("/healthz", s.healthz)
+	s.g.GET("/", s.indexRoute)
 
 	g := s.g.Group("/api/v1")
 
