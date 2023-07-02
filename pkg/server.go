@@ -5,6 +5,7 @@ import (
 	authenticator "backend/pkg/platform/auth"
 	"backend/pkg/reddit_compat"
 	"backend/pkg/request"
+	"backend/pkg/response"
 	"context"
 	"errors"
 	"fmt"
@@ -691,6 +692,53 @@ func (s *Server) authenticatedUser(c *gin.Context) {
 	}
 
 	c.Set("username", username)
+}
+
+// getUsers returns a paginated list of users
+func (s *Server) getUsers(c *gin.Context) {
+	var users []models.User
+	var count int64
+	pagination, done := s.getPagination(c)
+	if done {
+		return
+	}
+
+	tx := s.db.
+		Model(&models.User{}).
+		Where("deleted_at IS NULL").
+		Count(&count)
+	if tx.Error != nil {
+		s.logger.Errorf("Failed to get users: %v", tx.Error)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Failed to get users",
+		})
+		return
+	}
+
+	tx = s.db.
+		Preload("SocialLinks").
+		Order("username ASC").
+		Limit(int(pagination.Limit)).
+		Where("username > ? AND deleted_at IS NULL", pagination.After).
+		Find(&users)
+	if tx.Error != nil {
+		s.logger.Errorf("Failed to get users: %v", tx.Error)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Failed to get users",
+		})
+		return
+	}
+
+	responseUsers := cleanupUsers(users)
+	outputPagination := response.Paginated[models.User]{
+		Items: responseUsers,
+		Total: count,
+	}
+	if len(responseUsers) > 0 {
+		outputPagination.After = responseUsers[len(responseUsers)-1].Username
+	}
+
+	c.JSON(http.StatusOK, outputPagination)
 }
 
 func parseNilAsEmpty[T any](element T) T {

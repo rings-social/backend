@@ -40,6 +40,7 @@ func (s *Server) initRoutes() {
 
 	// Users
 	g.GET("/users/me", s.getMe)
+	g.GET("/users", s.getUsers)
 	g.GET("/users/:username", s.getUser)
 	g.GET("/users/:username/profilePicture", s.getUserProfilePicture)
 
