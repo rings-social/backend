@@ -50,7 +50,7 @@ func (s *Server) getComments(c *gin.Context) {
 		}
 	}
 
-	comments, done := s.retrieveComments(c, postId, parentId, commentActions)
+	comments, done := s.retrieveComments(c, uint(postId), parentId, commentActions)
 	if done {
 		return
 	}

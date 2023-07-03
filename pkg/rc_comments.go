@@ -41,7 +41,7 @@ func (s *Server) getRcComments(c *gin.Context) {
 		parentId = &parentIdUint
 	}
 
-	comments, done := s.retrieveComments(c, postId, parentId, map[uint]models.CommentAction{})
+	comments, done := s.retrieveComments(c, uint(postId), parentId, map[uint]models.CommentAction{})
 	if done {
 		return
 	}
@@ -58,11 +58,18 @@ func (s *Server) getRcComments(c *gin.Context) {
 
 func (s *Server) retrieveComments(
 	c *gin.Context,
-	postId int64,
+	postId uint,
 	parentId *uint,
 	commentActions map[uint]models.CommentAction,
 ) ([]models.Comment, bool) {
-	comments, err := s.repoComments(uint(postId), parentId)
+
+	var comments []models.Comment
+	var err error
+	if parentId != nil {
+		comments, err = s.repoGetCommentTree(postId, *parentId)
+	} else {
+		comments, err = s.repoGetTopComments(postId)
+	}
 	if err != nil {
 		s.logger.Errorf("unable to get comments for post %d: %v", postId, err)
 		internalServerError(c)
@@ -71,22 +78,36 @@ func (s *Server) retrieveComments(
 	comments = setCommentActions(comments, commentActions)
 	comments = maskDeletedComments(comments)
 
+	// Create a tree structure
+	commentTree := map[uint][]models.Comment{}
+	var topLevelComments []models.Comment
 	for k, comment := range comments {
-		childComments, err := s.repoComments(uint(postId), &comment.ID)
-		if err != nil {
-			s.logger.Errorf("unable to get child comments for comment %d: %v", comment.ID, err)
-			internalServerError(c)
-			return nil, true
+		if comment.ParentId != nil {
+			commentTree[*comment.ParentId] = append(commentTree[*comment.ParentId], comments[k])
+		} else {
+			topLevelComments = append(topLevelComments, comments[k])
 		}
-
-		childComments = setCommentActions(childComments, commentActions)
-
-		maskedChildComments := maskDeletedComments(childComments)
-		comments[k].Depth = 0
-		setDepth(maskedChildComments, comments[k].Depth+1)
-		comments[k].Replies = maskedChildComments
 	}
-	return comments, false
+
+	// Now that we have the relationships, create the array of top level comments (no parent)
+	for k, comment := range topLevelComments {
+		topLevelComments[k] = fillChildren(&comment, commentTree)
+	}
+
+	return topLevelComments, false
+}
+
+// fillChildren recursively fills the children with a comment
+func fillChildren(c *models.Comment, tree map[uint][]models.Comment) models.Comment {
+	children, ok := tree[c.ID]
+	if !ok {
+		return *c
+	}
+	for k, child := range children {
+		children[k] = fillChildren(&child, tree)
+	}
+	c.Replies = children
+	return *c
 }
 
 func setCommentActions(comments []models.Comment, actions map[uint]models.CommentAction) []models.Comment {
