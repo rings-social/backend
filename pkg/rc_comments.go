@@ -91,20 +91,21 @@ func (s *Server) retrieveComments(
 
 	// Now that we have the relationships, create the array of top level comments (no parent)
 	for k, comment := range topLevelComments {
-		topLevelComments[k] = fillChildren(&comment, commentTree)
+		topLevelComments[k] = fillChildren(1, &comment, commentTree)
 	}
 
 	return topLevelComments, false
 }
 
 // fillChildren recursively fills the children with a comment
-func fillChildren(c *models.Comment, tree map[uint][]models.Comment) models.Comment {
+func fillChildren(depth int, c *models.Comment, tree map[uint][]models.Comment) models.Comment {
+	c.Depth = depth
 	children, ok := tree[c.ID]
 	if !ok {
 		return *c
 	}
 	for k, child := range children {
-		children[k] = fillChildren(&child, tree)
+		children[k] = fillChildren(depth+1, &child, tree)
 	}
 	c.Replies = children
 	return *c
