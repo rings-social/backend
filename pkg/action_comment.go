@@ -233,3 +233,42 @@ func (s *Server) upvoteComment(c *gin.Context) {
 func (s *Server) downvoteComment(c *gin.Context) {
 	s.voteAction(c, models.ActionDownvote)
 }
+
+// routeGetRecentComments returns the most recent comments
+func (s *Server) routeGetRecentComments(c *gin.Context) {
+	afterParam := c.Query("after")
+	var after *uint64
+	if afterParam != "" {
+		// Parse after param
+		afterV, err := strconv.ParseUint(afterParam, 10, 64)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": "invalid after param",
+			})
+			return
+		}
+		after = &afterV
+	}
+
+	// count comments
+	countComments, err := s.repoCountComments()
+	if err != nil {
+		s.logger.Errorf("unable to count comments: %v", err)
+		internalServerError(c)
+		return
+	}
+
+	comments, err := s.repoRecentComments(after)
+	if err != nil {
+		s.logger.Errorf("unable to retrieve recent comments: %v", err)
+		internalServerError(c)
+		return
+	}
+
+	paginatedAfter := ""
+	if len(comments) != 0 {
+		paginatedAfter = fmt.Sprintf("%d", comments[len(comments)-1].ID)
+	}
+	returnPaginated(c, paginatedAfter, comments, countComments)
+
+}

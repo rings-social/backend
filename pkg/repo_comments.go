@@ -149,3 +149,9 @@ func (s *Server) repoDeleteComment(commentId uint) error {
 		Update("deleted_at", time.Now())
 	return tx.Error
 }
+
+func (s *Server) repoCountComments() (int64, error) {
+	var count int64
+	err := s.db.Model(&models.Comment{}).Count(&count).Error
+	return count, err
+}

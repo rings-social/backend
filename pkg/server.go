@@ -649,6 +649,23 @@ func (s *Server) getUsers(c *gin.Context) {
 	c.JSON(http.StatusOK, outputPagination)
 }
 
+func (s *Server) repoRecentComments(after *uint64) ([]models.Comment, error) {
+	var comments []models.Comment
+	tx := s.db.
+		Preload("Post").
+		Preload("Author").
+		Order("created_at DESC")
+
+	if after != nil {
+		tx = tx.Where("id < ?", *after)
+	}
+
+	tx.
+		Limit(5).
+		Find(&comments)
+	return comments, tx.Error
+}
+
 func parseNilAsEmpty[T any](element T) T {
 	// Given a RedditPosts struct, parse the struct tag for the `json` key and check if it does
 	// have the `nilasempty` key. If it does, then set the value to an empty array.

@@ -38,6 +38,8 @@ func (s *Server) initRoutes() {
 	g.POST("/posts/:id/comments", s.postComment)
 	g.DELETE("/posts/:id/comments/:commentId", s.deleteComment)
 
+	// Comments
+	g.GET("/comments", s.routeGetRecentComments)
 	g.PUT("/posts/:id/comments/:commentId/upvote", s.upvoteComment)
 	g.PUT("/posts/:id/comments/:commentId/downvote", s.downvoteComment)
 
