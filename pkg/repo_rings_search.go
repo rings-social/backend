@@ -9,6 +9,7 @@ import (
 func (s *Server) repoRingsSearch(q string, nsfw bool, after string, limit uint64) ([]models.Ring, error) {
 	var rings []models.Ring
 	q = strings.Replace(q, "%", "\\%", -1)
+	q = strings.ToLower(q)
 
 	tx := s.db
 	if after != "" {
