@@ -7,7 +7,7 @@ This is the backend code for [rings.social](https://rings.social) a content-voti
 - Go
 - `make`
 - Docker
-- `docket-compose`
+- `docker-compose`
 - Auth0 Application (auth can't be disabled for now)
 
 ## Getting started
