@@ -25,4 +25,6 @@ type Post struct {
 	Ups            int          `json:"ups"`
 	Downs          int          `json:"downs"`
 	Nsfw           bool         `json:"nsfw"`
+	VotedUp        bool         `json:"votedUp"`
+	VotedDown      bool         `json:"votedDown"`
 }

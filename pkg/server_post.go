@@ -1,6 +1,7 @@
 package server
 
 import (
+	"backend/pkg/models"
 	"errors"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -23,6 +24,25 @@ func (s *Server) getPost(c *gin.Context) {
 		s.logger.Errorf("unable to get post %d: %v", id, err)
 		internalServerError(c)
 		return
+	}
+
+	// If user is logged, check if user has upvoted this post
+	username := c.GetString("username")
+	if username != "" {
+		action, err := s.repoPostAction(uint(id), username)
+		if err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				// User hasn't voted this post
+				c.JSON(200, post)
+				return
+			} else {
+				s.logger.Errorf("unable to check if user %s has upvoted post %d: %v", username, id, err)
+				internalServerError(c)
+				return
+			}
+		}
+		post.VotedUp = action.Action == models.ActionUpvote
+		post.VotedDown = action.Action == models.ActionDownvote
 	}
 
 	c.JSON(200, post)

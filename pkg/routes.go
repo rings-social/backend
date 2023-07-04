@@ -28,15 +28,18 @@ func (s *Server) initRoutes() {
 	// Rings
 	g.GET("/rings", s.routeGetRings)
 	g.GET("/r/:ring", s.routeGetRing)
-	g.GET("/r/:ring/posts", s.getRingPosts)
+	g.GET("/r/:ring/posts", s.maybeAuthenticatedUser, s.getRingPosts)
 	g.POST("/r/:ring", s.authenticatedUser, s.routeCreateRing)
 
 	// Posts
 	g.POST("/posts", s.authenticatedUser, s.createPost)
-	g.GET("/posts/:id", s.getPost)
+	g.GET("/posts/:id", s.maybeAuthenticatedUser, s.getPost)
 	g.GET("/posts/:id/comments", s.getComments)
 	g.POST("/posts/:id/comments", s.postComment)
 	g.DELETE("/posts/:id/comments/:commentId", s.deleteComment)
+
+	g.PUT("/posts/:id/upvote", s.authenticatedUser, s.routeUpvotePost)
+	g.PUT("/posts/:id/downvote", s.authenticatedUser, s.routeDownvotePost)
 
 	// Comments
 	g.GET("/comments", s.routeGetRecentComments)

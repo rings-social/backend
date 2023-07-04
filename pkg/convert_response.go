@@ -24,6 +24,8 @@ func convertResponsePosts(posts []models.Post, r *models.Ring) []response.Post {
 			Ups:            p.Ups,
 			Downs:          p.Downs,
 			Nsfw:           p.Nsfw,
+			VotedUp:        p.VotedUp,
+			VotedDown:      p.VotedDown,
 		})
 	}
 	return responsePosts

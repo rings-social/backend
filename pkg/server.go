@@ -116,17 +116,14 @@ func validateRingName(name string) bool {
 func (s *Server) initModels() error {
 	// Auto-migrate all the models in `models`
 	// Check if the comment_action enum exists
-	var commentActionExists bool
-	tx := s.db.Raw("SELECT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'comment_action');").Scan(&commentActionExists)
-	if tx.Error != nil {
-		return tx.Error
+	err := s.createCommentAction()
+	if err != nil {
+		return err
 	}
 
-	if !commentActionExists {
-		tx := s.db.Exec("CREATE TYPE comment_action AS ENUM ('upvote', 'downvote');")
-		if tx.Error != nil {
-			return tx.Error
-		}
+	err = s.createPostAction()
+	if err != nil {
+		return err
 	}
 
 	return s.db.AutoMigrate(
@@ -136,7 +133,43 @@ func (s *Server) initModels() error {
 		&models.User{},
 		&models.SocialLink{},
 		&models.CommentAction{},
+		&models.PostAction{},
 	)
+}
+
+func (s *Server) createCommentAction() error {
+	var commentActionExists bool
+	tx := s.db.
+		Raw("SELECT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'comment_action')").
+		Scan(&commentActionExists)
+	if tx.Error != nil {
+		return tx.Error
+	}
+
+	if !commentActionExists {
+		tx = s.db.Exec("CREATE TYPE comment_action AS ENUM ('upvote', 'downvote');")
+		if tx.Error != nil {
+			return tx.Error
+		}
+	}
+	return nil
+}
+func (s *Server) createPostAction() error {
+	var exists bool
+	tx := s.db.
+		Raw("SELECT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'post_action')").
+		Scan(&exists)
+	if tx.Error != nil {
+		return tx.Error
+	}
+
+	if !exists {
+		tx = s.db.Exec("CREATE TYPE post_action AS ENUM ('upvote', 'downvote');")
+		if tx.Error != nil {
+			return tx.Error
+		}
+	}
+	return nil
 }
 
 func (s *Server) getRingPosts(context *gin.Context) {
@@ -169,6 +202,41 @@ func (s *Server) getRingPosts(context *gin.Context) {
 			"error": "Unable to get posts",
 		})
 		return
+	}
+
+	// Get the user's vote on each post
+	if context.GetString("username") != "" {
+		// Get a list of IDs for the posts
+		var postIds []uint
+		for _, p := range posts {
+			postIds = append(postIds, p.ID)
+		}
+
+		// Get votes for the posts
+		var votes []models.PostAction
+		tx = s.db.
+			Where("post_id IN ?", postIds).
+			Where("username = ?", context.GetString("username")).
+			Find(&votes)
+		if tx.Error != nil {
+			s.logger.Errorf("Unable to get votes for posts: %v", tx.Error)
+			internalServerError(context)
+			return
+		}
+
+		// Add votes to map
+		votesMap := make(map[uint]models.PostAction)
+		for _, v := range votes {
+			votesMap[v.PostId] = v
+		}
+
+		// Add votes to posts
+		for i, p := range posts {
+			if v, ok := votesMap[p.ID]; ok {
+				posts[i].VotedUp = v.Action == models.ActionUpvote
+				posts[i].VotedDown = v.Action == models.ActionDownvote
+			}
+		}
 	}
 
 	context.JSON(200, convertResponsePosts(posts, r))
@@ -664,6 +732,24 @@ func (s *Server) repoRecentComments(after *uint64) ([]models.Comment, error) {
 		Limit(5).
 		Find(&comments)
 	return comments, tx.Error
+}
+
+func (s *Server) repoIncreasePostScore(tx *gorm.DB, id uint, value int) error {
+	tx = tx.Model(&models.Post{}).
+		Where("id = ?", id).
+		UpdateColumn("score", gorm.Expr("score + ?", value))
+	return tx.Error
+}
+
+func (s *Server) repoPostAction(postId uint, username string) (*models.PostAction, error) {
+	var postAction models.PostAction
+	tx := s.db.
+		Where("post_id = ? AND username = ?", postId, username).
+		First(&postAction)
+	if tx.Error != nil {
+		return nil, tx.Error
+	}
+	return &postAction, nil
 }
 
 func parseNilAsEmpty[T any](element T) T {

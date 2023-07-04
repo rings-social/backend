@@ -126,6 +126,20 @@ func setCommentActions(comments []models.Comment, actions map[uint]models.Commen
 	return comments
 }
 
+func setPostActions(posts []models.Post, actions map[uint]models.PostAction) {
+	for k, v := range posts {
+		action, ok := actions[v.ID]
+		if ok {
+			switch action.Action {
+			case models.ActionDownvote:
+				posts[k].VotedDown = true
+			case models.ActionUpvote:
+				posts[k].VotedUp = true
+			}
+		}
+	}
+}
+
 func setDepth(comments []models.Comment, i int) {
 	for k, _ := range comments {
 		comments[k].Depth = i
