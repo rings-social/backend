@@ -3,6 +3,7 @@ package request
 import (
 	"fmt"
 	"net/url"
+	"strings"
 )
 
 type PostCreate struct {
@@ -17,6 +18,10 @@ func (c PostCreate) Validate() error {
 	// Titles can be maximum 300 characters
 	if len(c.Title) > 300 {
 		return fmt.Errorf("title cannot be longer than 60 characters")
+	}
+
+	if len(strings.TrimSpace(c.Title)) == 0 {
+		return fmt.Errorf("title cannot be empty")
 	}
 
 	// Body can be maximum 1000 characters
