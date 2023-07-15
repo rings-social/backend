@@ -8,11 +8,10 @@ import (
 func convertResponsePosts(posts []models.Post, r *models.Ring) []response.Post {
 	var responsePosts []response.Post
 	for _, p := range posts {
-		responsePosts = append(responsePosts, response.Post{
+		responsePost := response.Post{
 			ID:             int(p.ID),
 			CreatedAt:      p.CreatedAt,
-			RingName:       r.Name,
-			RingColor:      r.PrimaryColor,
+			RingName:       p.RingName,
 			AuthorUsername: p.AuthorUsername,
 			Author:         p.Author,
 			Title:          p.Title,
@@ -26,7 +25,13 @@ func convertResponsePosts(posts []models.Post, r *models.Ring) []response.Post {
 			Nsfw:           p.Nsfw,
 			VotedUp:        p.VotedUp,
 			VotedDown:      p.VotedDown,
-		})
+		}
+		if p.Ring != nil {
+			responsePost.RingColor = p.Ring.PrimaryColor
+		} else {
+			responsePost.RingColor = r.PrimaryColor
+		}
+		responsePosts = append(responsePosts, responsePost)
 	}
 	return responsePosts
 }

@@ -191,17 +191,26 @@ func (s *Server) getRingPosts(context *gin.Context) {
 	}
 
 	var posts []models.Post
-	tx := s.db.
-		Preload("Author").
-		Limit(100).
-		Order("score desc, created_at DESC").
-		Find(&posts, "ring_name = ?", ringName)
-	if tx.Error != nil {
-		s.logger.Errorf("Unable to get posts for %s: %v", ringName, tx.Error)
-		context.AbortWithStatusJSON(500, gin.H{
-			"error": "Unable to get posts",
-		})
-		return
+	if ringName == "popular" {
+		posts, err = s.handlePopular()
+		if err != nil {
+			s.logger.Errorf("Unable to get popular posts: %v", err)
+			internalServerError(context)
+			return
+		}
+	} else {
+		tx := s.db.
+			Preload("Author").
+			Limit(100).
+			Order("score desc, created_at DESC").
+			Find(&posts, "ring_name = ?", ringName)
+		if tx.Error != nil {
+			s.logger.Errorf("Unable to get posts for %s: %v", ringName, tx.Error)
+			context.AbortWithStatusJSON(500, gin.H{
+				"error": "Unable to get posts",
+			})
+			return
+		}
 	}
 
 	// Get the user's vote on each post
@@ -214,7 +223,7 @@ func (s *Server) getRingPosts(context *gin.Context) {
 
 		// Get votes for the posts
 		var votes []models.PostAction
-		tx = s.db.
+		tx := s.db.
 			Where("post_id IN ?", postIds).
 			Where("username = ?", context.GetString("username")).
 			Find(&votes)
@@ -750,6 +759,25 @@ func (s *Server) repoPostAction(postId uint, username string) (*models.PostActio
 		return nil, tx.Error
 	}
 	return &postAction, nil
+}
+
+// handlePopular returns a list of popular posts for the frontpage
+func (s *Server) handlePopular() ([]models.Post, error) {
+	threshold := time.Hour * 24 * 365
+	minPublishDate := time.Now().Add(-threshold)
+	var posts []models.Post
+	err := s.db.
+		Preload("Author").
+		Preload("Ring").
+		Where("created_at > ?", minPublishDate).
+		Order("(score / extract(epoch from (now() - created_at))) DESC, score DESC, comments_count, created_at DESC").
+		Limit(100).
+		Find(&posts).Error
+	if err != nil {
+		return nil, err
+	}
+
+	return posts, nil
 }
 
 func parseNilAsEmpty[T any](element T) T {
